@@ -78,3 +78,7 @@ const phoneCodeSchema = new Schema({
 });
 phoneCodeSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 export const PhoneCode = model('PhoneCode', phoneCodeSchema);
+
+// Listing photos kept in MongoDB when no Cloudinary account is configured.
+const imageFileSchema = new Schema({ _id: String, data: { type: Buffer, required: true }, contentType: { type: String, required: true } }, { timestamps: true });
+export const ImageFile = model('ImageFile', imageFileSchema);

@@ -323,3 +323,28 @@ test('WhatsApp codes are hashed, single-use, expire and lock after five wrong at
   assert.equal(status.status, 200);
   assert.equal(status.body.data.linked, false);
 });
+
+test('without Cloudinary, photos are shrunk to WebP, stored in MongoDB and served cross-origin', async () => {
+  const { default: sharp } = await import('sharp');
+  const { ImageFile } = await import('../src/models/index.js');
+  const owner = await account('OWNER', 'photoowner');
+  const hostelId = (await write(owner.agent, 'post', '/hostels', body)).body.data._id;
+  const photo = await sharp({ create: { width: 3000, height: 2000, channels: 3, background: '#7a9' } }).jpeg().toBuffer();
+  const uploaded = await owner.agent.post(`/api/hostels/${hostelId}/images`).set('Origin', origin).set('X-Requested-With', 'HostelHub').attach('images', photo, { filename: 'room.jpg', contentType: 'image/jpeg' });
+  assert.equal(uploaded.status, 201, JSON.stringify(uploaded.body));
+  const [image] = uploaded.body.data.images;
+  assert.match(image.publicId, /^db:/);
+  assert.equal(uploaded.body.data.coverImage, image.publicId);
+  const path = new URL(image.url).pathname;
+  const served = await request(app).get(path).buffer(true).parse((res, done) => { const chunks = []; res.on('data', chunk => chunks.push(chunk)); res.on('end', () => done(null, Buffer.concat(chunks))); });
+  assert.equal(served.status, 200);
+  assert.equal(served.headers['content-type'], 'image/webp');
+  assert.equal(served.headers['cross-origin-resource-policy'], 'cross-origin');
+  assert.match(served.headers['cache-control'], /immutable/);
+  const { width, height, format } = await sharp(served.body).metadata();
+  assert.deepEqual({ width, height, format }, { width: 1600, height: 1067, format: 'webp' });
+  assert.equal((await request(app).get('/api/images/not-a-uuid')).status, 400);
+  assert.equal((await write(owner.agent, 'delete', `/hostels/${hostelId}/images`, { publicId: image.publicId })).status, 200);
+  assert.equal(await ImageFile.countDocuments(), 0);
+  assert.equal((await request(app).get(path)).status, 404);
+});

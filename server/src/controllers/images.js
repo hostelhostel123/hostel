@@ -1,5 +1,6 @@
 import { ownedHostel, requireEditable, resetReview } from '../services/hostels.js';
 import { uploadImage, deleteImage } from '../services/images.js';
+export { serveImage as show } from '../services/images.js';
 import { HttpError } from '../middleware/http.js';
 
 export async function upload(req, res) {
@@ -8,7 +9,8 @@ export async function upload(req, res) {
   if (!req.files?.length || hostel.images.length + req.files.length > 10) throw new HttpError(400, 'Provide images; a listing can have at most 10');
   const added = [];
   try {
-    for (const file of req.files) added.push(await uploadImage(file));
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    for (const file of req.files) added.push(await uploadImage(file, baseUrl));
     hostel.images.push(...added);
     hostel.coverImage ||= hostel.images[0].publicId;
     resetReview(hostel);
