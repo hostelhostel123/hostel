@@ -1,9 +1,11 @@
 import { useState } from 'react'
+import { useCssVars } from './theme'
 import { availability, availabilityText, formatPrice, seatLabel } from '../lib/rooms'
 
-// Blueprint palette. Colours that must be told apart also differ in lightness.
-const C = { floor: '#111a21', corridor: '#0d151b', wall: '#c4d0d9', wallSoft: '#6f808e', label: '#e8eef2', dim: '#7f909d', grid: '#16222b', open: '#4fd1a1', limited: '#f2a65a', full: '#55636f', bedTaken: '#2b3741' }
-const tone = { open: C.open, limited: C.limited, full: C.full }
+// Blueprint colours come from the active theme (styles.css), so the plan follows light and dark mode.
+const PLAN_VARS = { floor: '--plan-floor', corridor: '--plan-corridor', wall: '--plan-wall', wallSoft: '--plan-wall-soft', label: '--plan-label', dim: '--plan-dim', grid: '--plan-grid', gridMajor: '--plan-grid-major', open: '--plan-open', limited: '--plan-limited', full: '--plan-full', bedTaken: '--plan-bed-taken', takenLine: '--plan-bed-taken-line', window: '--plan-window', tiles: '--plan-tiles' }
+const C = {}
+const toneOf = state => C[state]
 const PAD = 9
 const EXT = 1.1, INT = 0.5
 
@@ -51,10 +53,10 @@ function Windows({ item, width, height }) {
   const pane = (key, x1, y1, x2, y2) => {
     const horizontal = y1 === y2, o = 0.32
     const shift = (dx, dy) => ({ x1: x1 + dx, y1: y1 + dy, x2: x2 + dx, y2: y2 + dy })
-    out.push(<g key={key}><line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#0e1317" strokeWidth={EXT + 0.15} />
+    out.push(<g key={key}><line x1={x1} y1={y1} x2={x2} y2={y2} stroke={C.corridor} strokeWidth={EXT + 0.15} />
       <line {...shift(horizontal ? 0 : -o, horizontal ? -o : 0)} stroke={C.wall} strokeWidth={0.16} />
       <line {...shift(horizontal ? 0 : o, horizontal ? o : 0)} stroke={C.wall} strokeWidth={0.16} />
-      <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#7fb4d6" strokeWidth={0.14} /></g>)
+      <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={C.window} strokeWidth={0.14} /></g>)
   }
   if (near(y, 0)) pane('t', x + w * 0.3, 0, x + w * 0.7, 0)
   if (near(y + h, height)) pane('b', x + w * 0.3, height, x + w * 0.7, height)
@@ -72,7 +74,7 @@ function Beds({ room, side, state }) {
   const bl = Math.min(7, (room.h - inset * 2 - 6.5 - (rows - 1) * gap) / rows)
   const fromBottom = side === 'top'
   const taken = n - room.available
-  const color = tone[state]
+  const color = toneOf(state)
   return Array.from({ length: n }, (_, index) => {
     const row = Math.floor(index / cols), col = index % cols
     const inRow = Math.min(cols, n - row * cols)
@@ -83,9 +85,9 @@ function Beds({ room, side, state }) {
     const pillowY = fromBottom ? by + bl - 1.7 : by + 0.4
     const foldY = fromBottom ? by + bl * 0.42 : by + bl * 0.58
     return <g key={index}>
-      <rect x={bx} y={by} width={bw} height={bl} rx={0.35} fill={occupied ? C.bedTaken : `${color}1f`} stroke={occupied ? '#46545f' : color} strokeWidth={0.25} />
-      <rect x={bx + 0.45} y={pillowY} width={bw - 0.9} height={1.3} rx={0.3} fill={occupied ? '#3a4752' : 'none'} stroke={occupied ? '#55636f' : color} strokeWidth={0.2} />
-      <line x1={bx + 0.25} y1={foldY} x2={bx + bw - 0.25} y2={foldY} stroke={occupied ? '#46545f' : color} strokeWidth={0.18} opacity=".8" />
+      <rect x={bx} y={by} width={bw} height={bl} rx={0.35} fill={occupied ? C.bedTaken : `${color}1f`} stroke={occupied ? C.takenLine : color} strokeWidth={0.25} />
+      <rect x={bx + 0.45} y={pillowY} width={bw - 0.9} height={1.3} rx={0.3} fill={occupied ? C.takenLine : 'none'} stroke={occupied ? C.takenLine : color} strokeWidth={0.2} />
+      <line x1={bx + 0.25} y1={foldY} x2={bx + bw - 0.25} y2={foldY} stroke={occupied ? C.takenLine : color} strokeWidth={0.18} opacity=".8" />
     </g>
   })
 }
@@ -102,12 +104,13 @@ function AreaFurniture({ area }) {
   }
   if (kind === 'BATH') return <g><rect x={x} y={y} width={w} height={h} fill="url(#tiles)" />{[0, 1].map(i => <g key={i}><rect x={x + 1.2 + i * 4} y={y + 1.2} width={2.6} height={1.2} rx={0.3} {...s} /><ellipse cx={x + 2.5 + i * 4} cy={y + 3.6} rx={1.2} ry={1.5} {...s} /></g>)}<rect x={x + w - 3} y={y + h - 9} width={1.8} height={6} rx={0.4} {...s} /></g>
   if (kind === 'KITCHEN') return <g><path d={`M${x + 1} ${y + 1} H${x + w - 1} V${y + 4} H${x + 4} V${y + h - 6} H${x + 1} Z`} {...s} /><circle cx={x + w * 0.45} cy={y + 2.5} r={0.9} {...s} />{[0, 1].map(i => <circle key={i} cx={x + w - 4 - i * 2.6} cy={y + 2.5} r={0.8} {...s} />)}<rect x={cx - 3} y={cy + 1} width={6} height={4} rx={0.4} {...s} /></g>
-  if (kind === 'COMMON') return <g><path d={`M${cx - 7} ${cy - 4} V${cy + 3} H${cx + 7} V${cy - 4}`} {...s} strokeWidth={0.9} stroke="#2c3a45" /><rect x={cx - 3.5} y={cy - 2.5} width={7} height={3} rx={0.5} {...s} /><rect x={x + 1.5} y={y + 1.5} width={w - 3} height={h - 3} rx={0.6} fill="none" stroke="#1d2932" strokeWidth={0.2} strokeDasharray="0.6 0.6" /></g>
+  if (kind === 'COMMON') return <g><path d={`M${cx - 7} ${cy - 4} V${cy + 3} H${cx + 7} V${cy - 4}`} {...s} strokeWidth={0.9} stroke={C.wallSoft} /><rect x={cx - 3.5} y={cy - 2.5} width={7} height={3} rx={0.5} {...s} /><rect x={x + 1.5} y={y + 1.5} width={w - 3} height={h - 3} rx={0.6} fill="none" stroke={C.gridMajor} strokeWidth={0.2} strokeDasharray="0.6 0.6" /></g>
   if (kind === 'STUDY') return <g>{Array.from({ length: Math.max(1, Math.floor((w - 2) / 6)) }, (_, i) => [0, 1].map(r => <g key={`${i}-${r}`}><rect x={x + 1.5 + i * 6} y={y + 2 + r * 8} width={4.6} height={2.2} {...s} /><circle cx={x + 3.8 + i * 6} cy={y + 5.4 + r * 8} r={0.8} {...s} /></g>))}</g>
   return null
 }
 
 export function FloorPlan({ rooms, areas, selected, onSelect }) {
+  Object.assign(C, useCssVars(PLAN_VARS))
   const [hovered, setHovered] = useState('')
   const items = [...rooms, ...areas]
   const width = Math.max(...items.map(item => item.x + item.w))
@@ -123,9 +126,9 @@ export function FloorPlan({ rooms, areas, selected, onSelect }) {
     <svg viewBox={`${-PAD} ${-PAD} ${vw} ${vh}`} className="absolute inset-0 h-full w-full" aria-hidden="true" fontFamily="'Geist Mono', ui-monospace, monospace">
       <defs>
         <pattern id="bp-grid" width="2.5" height="2.5" patternUnits="userSpaceOnUse"><path d="M2.5 0H0V2.5" fill="none" stroke={C.grid} strokeWidth="0.12" /></pattern>
-        <pattern id="bp-grid-major" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M10 0H0V10" fill="none" stroke="#1d2b35" strokeWidth="0.18" /></pattern>
-        <pattern id="tiles" width="1.6" height="1.6" patternUnits="userSpaceOnUse"><path d="M1.6 0H0V1.6" fill="none" stroke="#1e2c36" strokeWidth="0.1" /></pattern>
-        <pattern id="hatch" width="1.4" height="1.4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="1.4" stroke="#2a3640" strokeWidth="0.35" /></pattern>
+        <pattern id="bp-grid-major" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M10 0H0V10" fill="none" stroke={C.gridMajor} strokeWidth="0.18" /></pattern>
+        <pattern id="tiles" width="1.6" height="1.6" patternUnits="userSpaceOnUse"><path d="M1.6 0H0V1.6" fill="none" stroke={C.tiles} strokeWidth="0.1" /></pattern>
+        <pattern id="hatch" width="1.4" height="1.4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="1.4" stroke={C.takenLine} strokeWidth="0.35" /></pattern>
       </defs>
       <rect x={-PAD} y={-PAD} width={vw} height={vh} fill="url(#bp-grid)" />
       <rect x={-PAD} y={-PAD} width={vw} height={vh} fill="url(#bp-grid-major)" />
@@ -143,8 +146,8 @@ export function FloorPlan({ rooms, areas, selected, onSelect }) {
         const active = room.code === selected, hot = room.code === hovered
         return <g key={`f-${room.code}`}>
           <rect x={room.x} y={room.y} width={room.w} height={room.h} fill={C.floor} />
-          {state === 'full' ? <rect x={room.x} y={room.y} width={room.w} height={room.h} fill="url(#hatch)" /> : <rect className="plan-room" x={room.x} y={room.y} width={room.w} height={room.h} fill={tone[state]} opacity={active ? 0.13 : hot ? 0.11 : 0.06} />}
-          {active && <rect x={room.x + 0.55} y={room.y + 0.55} width={room.w - 1.1} height={room.h - 1.1} fill="none" stroke="#ffffff" strokeWidth={0.22} opacity=".55" />}
+          {state === 'full' ? <rect x={room.x} y={room.y} width={room.w} height={room.h} fill="url(#hatch)" /> : <rect className="plan-room" x={room.x} y={room.y} width={room.w} height={room.h} fill={toneOf(state)} opacity={active ? 0.13 : hot ? 0.11 : 0.06} />}
+          {active && <rect x={room.x + 0.55} y={room.y + 0.55} width={room.w - 1.1} height={room.h - 1.1} fill="none" stroke={C.label} strokeWidth={0.22} opacity=".55" />}
         </g>
       })}
       {areas.filter(area => area.kind !== 'CORRIDOR').map(area => <Walls key={`w-${area.label}-${area.x}-${area.y}`} item={area} side={doorSide(area, corridors, height)} door={area.kind !== 'STAIRS'} />)}
@@ -153,7 +156,7 @@ export function FloorPlan({ rooms, areas, selected, onSelect }) {
         const state = availability(room)
         const top = side === 'top'
         const labelY = top ? room.y + 4 : room.y + room.h - 3.9
-        const color = tone[state]
+        const color = toneOf(state)
         return <g key={`r-${room.code}`}>
           <Beds room={room} side={side} state={state} />
           <Walls item={room} side={side} />
@@ -166,10 +169,10 @@ export function FloorPlan({ rooms, areas, selected, onSelect }) {
         const lw = area.label.length * 1.05 + 1.6
         return <g key={`l-${area.label}-${area.x}`}><rect x={area.x + area.w / 2 - lw / 2} y={ly - 1.45} width={lw} height={2.1} rx={0.3} fill={C.floor} /><text x={area.x + area.w / 2} y={ly} fontSize="1.3" letterSpacing="0.25" textAnchor="middle" fill={C.dim}>{area.label.toUpperCase()}</text></g>
       })}
-      {corridors.map(c => <text key={`c-${c.x}-${c.y}`} x={c.x + c.w / 2} y={c.y + c.h / 2 + 0.5} fontSize="1.3" letterSpacing="0.6" textAnchor="middle" fill="#4a5a67">{c.label.toUpperCase()}</text>)}
+      {corridors.map(c => <text key={`c-${c.x}-${c.y}`} x={c.x + c.w / 2} y={c.y + c.h / 2 + 0.5} fontSize="1.3" letterSpacing="0.6" textAnchor="middle" fill={C.dim}>{c.label.toUpperCase()}</text>)}
       <rect x={0} y={0} width={width} height={height} fill="none" stroke={C.wall} strokeWidth={EXT} />
       {rooms.flatMap(room => Windows({ item: room, width, height }).map(node => <g key={`win-${room.code}-${node.key}`}>{node}</g>))}
-      {focus && <g className={focus.code === selected ? 'plan-pulse' : ''} stroke={focus.code === selected ? '#ffffff' : C.label} strokeWidth="0.4" fill="none" opacity={focus.code === selected ? 1 : 0.6}>
+      {focus && <g className={focus.code === selected ? 'plan-pulse' : ''} stroke={focus.code === selected ? C.label : C.label} strokeWidth="0.4" fill="none" opacity={focus.code === selected ? 1 : 0.6}>
         {[[focus.x - 1, focus.y - 1, 1, 1], [focus.x + focus.w + 1, focus.y - 1, -1, 1], [focus.x - 1, focus.y + focus.h + 1, 1, -1], [focus.x + focus.w + 1, focus.y + focus.h + 1, -1, -1]].map(([bx, by, dx, dy], i) => <path key={i} d={`M${bx + dx * 3} ${by} H${bx} V${by + dy * 3}`} />)}
       </g>}
     </svg>
@@ -178,23 +181,24 @@ export function FloorPlan({ rooms, areas, selected, onSelect }) {
       aria-label={`Room ${room.code}, ${seatLabel(room.seats)}, ${room.available} of ${room.seats} seats free, ${formatPrice(room.price)} per seat per month`}
       style={{ left: pct(room.x, vw), top: pct(room.y, vh), width: size(room.w, vw), height: size(room.h, vh) }}
       className="absolute cursor-pointer bg-transparent outline-offset-[-2px] focus-visible:outline-2 focus-visible:outline-white" />)}
-    {tip && tip.code !== selected && <div role="presentation" className="fade pointer-events-none absolute z-20 w-max -translate-x-1/2 -translate-y-full rounded-lg border border-[#2a3843] bg-[#0b1116]/95 px-3 py-2 shadow-xl backdrop-blur" style={{ left: pct(tip.x + tip.w / 2, vw), top: `calc(${pct(tip.y, vh)} - 8px)` }}>
+    {tip && tip.code !== selected && <div role="presentation" className="fade pointer-events-none absolute z-20 w-max -translate-x-1/2 -translate-y-full rounded-lg border border-plan-edge bg-plan/95 px-3 py-2 shadow-xl backdrop-blur" style={{ left: pct(tip.x + tip.w / 2, vw), top: `calc(${pct(tip.y, vh)} - 8px)` }}>
       <p className="font-mono text-[12px] font-semibold text-plan-text">Room {tip.code} · {seatLabel(tip.seats)}</p>
-      <p className="mt-0.5 font-mono text-[11px] text-[#9aa7b2]"><span style={{ color: tone[availability(tip)] === C.full ? undefined : tone[availability(tip)] }}>{availabilityText[availability(tip)]}</span> · {formatPrice(tip.price)}/seat</p>
+      <p className="mt-0.5 font-mono text-[11px] text-plan-muted"><span style={{ color: availability(tip) === 'full' ? undefined : toneOf(availability(tip)) }}>{availabilityText[availability(tip)]}</span> · {formatPrice(tip.price)}/seat</p>
     </div>}
   </div>
 }
 
 export function PlanLegend() {
-  const bed = (fill, stroke) => <svg width="10" height="16" viewBox="0 0 10 16" aria-hidden="true"><rect x="1" y="1" width="8" height="14" rx="1" fill={fill} stroke={stroke} strokeWidth="1.2" /><rect x="2.5" y="2.5" width="5" height="3" rx=".6" fill="none" stroke={stroke} strokeWidth="1" /></svg>
-  return <ul className="flex flex-wrap items-center gap-x-5 gap-y-2 font-mono text-[11px] uppercase tracking-wider text-[#9aa7b2]">
-    <li className="flex items-center gap-2">{bed('rgba(79,209,161,.15)', C.open)}Free bed</li>
-    <li className="flex items-center gap-2">{bed('rgba(242,166,90,.15)', C.limited)}Last bed</li>
-    <li className="flex items-center gap-2">{bed(C.bedTaken, '#55636f')}Taken</li>
-    <li className="flex items-center gap-2"><span className="h-3.5 w-3.5 border border-[#3a4752] bg-[repeating-linear-gradient(45deg,#2a3640_0_2px,transparent_2px_5px)]" />Full room</li>
+  const bed = (fill, stroke) => <svg width="10" height="16" viewBox="0 0 10 16" aria-hidden="true"><rect x="1" y="1" width="8" height="14" rx="1" style={{ fill, stroke }} strokeWidth="1.2" /><rect x="2.5" y="2.5" width="5" height="3" rx=".6" fill="none" style={{ stroke }} strokeWidth="1" /></svg>
+  const tint = name => `color-mix(in srgb, var(${name}) 18%, transparent)`
+  return <ul className="flex flex-wrap items-center gap-x-5 gap-y-2 font-mono text-[11px] uppercase tracking-wider text-plan-muted">
+    <li className="flex items-center gap-2">{bed(tint('--plan-open'), 'var(--plan-open)')}Free bed</li>
+    <li className="flex items-center gap-2">{bed(tint('--plan-limited'), 'var(--plan-limited)')}Last bed</li>
+    <li className="flex items-center gap-2">{bed('var(--plan-bed-taken)', 'var(--plan-bed-taken-line)')}Taken</li>
+    <li className="flex items-center gap-2"><span className="h-3.5 w-3.5 border border-plan-edge" style={{ background: 'repeating-linear-gradient(45deg, var(--plan-bed-taken-line) 0 1.5px, transparent 1.5px 5px)' }} />Full room</li>
   </ul>
 }
 
 export function FloorTabs({ floors, floor, onChange }) {
-  return <div role="tablist" aria-label="Floors" className="inline-flex rounded-lg border border-plan-wall bg-black/20 p-1">{floors.map(value => <button key={value} role="tab" type="button" aria-selected={value === floor} onClick={() => onChange(value)} className={`min-h-9 rounded-md px-3 font-mono text-xs uppercase tracking-wider transition-colors ${value === floor ? 'bg-plan-text text-plan' : 'text-[#9aa7b2] hover:text-plan-text'}`}>{value === 0 ? 'Ground floor' : `Floor ${value}`}</button>)}</div>
+  return <div role="tablist" aria-label="Floors" className="inline-flex rounded-lg border border-plan-edge p-1">{floors.map(value => <button key={value} role="tab" type="button" aria-selected={value === floor} onClick={() => onChange(value)} className={`min-h-9 rounded-md px-3 font-mono text-xs uppercase tracking-wider transition-colors ${value === floor ? 'bg-plan-text text-plan' : 'text-plan-muted hover:text-plan-text'}`}>{value === 0 ? 'Ground floor' : `Floor ${value}`}</button>)}</div>
 }

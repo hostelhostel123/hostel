@@ -1,9 +1,11 @@
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
+import { currentTheme, onThemeChange, readVars } from './theme'
 
 // Plan units match the floor-plan editor's: rooms along both sides of a corridor.
 const rooms = [[0, 0, 18, 22], [18, 0, 20, 22], [38, 0, 20, 22], [58, 0, 12, 22], [70, 0, 30, 22], [0, 32, 30, 22], [30, 32, 10, 22], [40, 32, 20, 22], [60, 32, 20, 22], [80, 32, 20, 22]]
 const open = [[1, 4, 8], [0, 7, 9], [2, 8], [1, 2, 7]]
+const SCENE_VARS = { slab: '--scene-slab', wall: '--scene-wall', open: '--scene-open', edge: '--scene-edge' }
 const FLOORS = 4, SCALE = 0.1, WALL = 0.95, GAP = 1.55
 
 export default function HeroScene() {
@@ -37,10 +39,21 @@ export default function HeroScene() {
     scene.add(building)
     const disposables = []
     const track = item => { disposables.push(item); return item }
-    const slabMaterial = track(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9 }))
-    const wallMaterial = track(new THREE.MeshStandardMaterial({ color: 0xf3f1ec, roughness: 0.95, transparent: true, opacity: 0.55 }))
-    const openMaterial = track(new THREE.MeshStandardMaterial({ color: 0x1e5b4f, roughness: 0.6, transparent: true, opacity: 0.82 }))
-    const edgeMaterial = track(new THREE.LineBasicMaterial({ color: 0x121417, transparent: true, opacity: 0.5 }))
+    const slabMaterial = track(new THREE.MeshStandardMaterial({ roughness: 0.9 }))
+    const wallMaterial = track(new THREE.MeshStandardMaterial({ roughness: 0.95, transparent: true, opacity: 0.55 }))
+    const openMaterial = track(new THREE.MeshStandardMaterial({ roughness: 0.6, transparent: true, opacity: 0.85 }))
+    const edgeMaterial = track(new THREE.LineBasicMaterial({ transparent: true, opacity: 0.5 }))
+    const hemisphere = scene.children.find(child => child.isHemisphereLight)
+    const shadow = ground.material
+    function paint() {
+      const colors = readVars(SCENE_VARS)
+      slabMaterial.color.set(colors.slab); wallMaterial.color.set(colors.wall); openMaterial.color.set(colors.open); edgeMaterial.color.set(colors.edge)
+      const dark = currentTheme() === 'dark'
+      edgeMaterial.opacity = dark ? 0.35 : 0.5
+      hemisphere.intensity = dark ? 0.9 : 1.6
+      shadow.opacity = dark ? 0.35 : 0.09
+    }
+    paint()
     const floors = []
     for (let level = 0; level < FLOORS; level++) {
       const floor = new THREE.Group()
@@ -88,11 +101,13 @@ export default function HeroScene() {
       renderer.render(scene, camera)
     }
     function tick(time) { frame = 0; place(time); if (visible) frame = requestAnimationFrame(tick) }
+    const stopTheme = onThemeChange(() => { paint(); if (reduced) place(performance.now()) })
     if (reduced) place(start)
     else frame = requestAnimationFrame(tick)
 
     return () => {
       cancelAnimationFrame(frame)
+      stopTheme()
       observer.disconnect()
       visibility.disconnect()
       element.removeEventListener('pointermove', move)
