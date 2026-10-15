@@ -1,11 +1,11 @@
-import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useRef, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../services/api'
 import { ArrowRight, ImagePlus, MapPin, MessageCircle, Plus, Trash2 } from 'lucide-react'
 import { FloorPlan, FloorTabs, PlanLegend } from '../components/FloorPlan'
-import { floorName, floorsOf } from '../lib/rooms'
-import { Button, Cover, Empty, ErrorNotice, Field, Loading, Notice, Page, Pagination, StatTile, Status, useResource } from '../components/ui'
+import { floorName, floorsOf, priceRange } from '../lib/rooms'
+import { Button, Cover, Empty, ErrorNotice, Field, Loading, Page, Pagination, StatTile, Status, Toast, useResource, useToast } from '../components/ui'
 
 export function OwnerDashboard() {
   const { user } = useAuth()
@@ -55,15 +55,22 @@ function seatPrices(room, plan) {
   const price = Number(plan.rates[room.seats] || 0) + (room.bath === 'ATTACHED' ? Number(plan.attachedBathExtra || 0) : 0)
   return Array.from({ length: room.seats }, () => price)
 }
+// The first thing stopping the plan from saving, and the id of the field to take the owner to.
 function planProblem(plan) {
-  const rooms = plan.floors.flatMap(floor => floor.rooms)
-  if (!rooms.length) return 'Add at least one room.'
-  if (rooms.some(room => room.available !== '' && Number(room.available) > room.seats)) return 'A room has more free seats than it has seats.'
+  const rooms = plan.floors.flatMap((floor, f) => floor.rooms.map((room, index) => ({ room, f, index })))
+  if (!rooms.length) return { message: 'Add at least one room to your floors.', field: 'add-rooms-0' }
+  const tooMany = rooms.find(({ room }) => room.available !== '' && Number(room.available) > room.seats)
+  if (tooMany) return { message: `Room ${tooMany.room.code || autoCode(tooMany.f, tooMany.index)} has more free seats than seats.`, field: `room-${tooMany.f}-${tooMany.index}-free` }
   if (plan.mode === 'STANDARD') {
-    const missing = [...new Set(rooms.map(room => room.seats))].sort().filter(seats => !(Number(plan.rates[seats]) > 0))
-    if (missing.length) return `Enter the price of a bed in ${missing.map(seaterLabel).join(', ')} rooms.`
-  } else if (rooms.some(room => seatPrices(room, plan).some(price => !(price > 0)))) return 'Enter a price for every seat in every room.'
-  return ''
+    const missing = [...new Set(rooms.map(({ room }) => room.seats))].sort().filter(seats => !(Number(plan.rates[seats]) > 0))
+    if (missing.length) return { message: `Enter the price of a bed in ${missing.map(seaterLabel).join(', ')} rooms.`, field: `rate-${missing[0]}` }
+  } else {
+    for (const { room, f, index } of rooms) {
+      const seat = seatPrices(room, plan).findIndex(price => !(price > 0))
+      if (seat >= 0) return { message: `Enter the price of seat ${seat + 1} in room ${room.code || autoCode(f, index)}.`, field: `room-${f}-${index}-seat-${seat}` }
+    }
+  }
+  return null
 }
 const splitList = value => value.split(',').map(item => item.trim()).filter(Boolean)
 function listingBody(form) {
@@ -81,11 +88,27 @@ function listingBody(form) {
 }
 function Step({ number, title, hint, htmlFor, children }) {
   const Title = htmlFor ? 'label' : 'h3'
-  return <section className="grid gap-4 border-t border-line px-6 py-6 first:border-t-0"><div><Title htmlFor={htmlFor} className="block font-semibold"><span className="mr-2 tabular-nums text-xs text-faint">{String(number).padStart(2, '0')}</span>{title}</Title>{hint && <p className="mt-1 text-sm text-muted">{hint}</p>}</div>{children}</section>
+  return <section className="grid gap-4 border-t border-line px-6 py-6 first:border-t-0"><div><div className="flex items-baseline gap-2"><span aria-hidden="true" className="tabular-nums text-xs text-faint">{String(number).padStart(2, '0')}</span><Title htmlFor={htmlFor} className="block font-semibold">{title}</Title></div>{hint && <p className="mt-1 text-sm text-muted">{hint}</p>}</div>{children}</section>
 }
 const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`
-function FloorsEditor({ plan, onChange }) {
-  const [quick, setQuick] = useState({ count: '4', seats: '2', bath: 'SHARED' })
+// One sentence per floor says exactly what its button will add: "Add [4] [2-seater] rooms with [shared] bathrooms".
+function AddRooms({ floor, full, onAdd }) {
+  const [count, setCount] = useState('4')
+  const [seats, setSeats] = useState('2')
+  const [bath, setBath] = useState('SHARED')
+  const n = Math.max(1, Math.min(40, Number(count) || 1))
+  const where = floorLabel(floor).toLowerCase()
+  return <div className="flex flex-wrap items-center gap-2 border-t border-line px-4 py-3 text-sm">
+    <span className="text-muted">Add</span>
+    <input className="input !h-10 w-16" type="number" min={1} max={40} value={count} onChange={event => setCount(event.target.value)} aria-label={`How many rooms to add to ${where}`} />
+    <select className="input !h-10 w-28" value={seats} onChange={event => setSeats(event.target.value)} aria-label={`Seats in each new room on ${where}`}>{seatSizes.map(value => <option key={value} value={value}>{seaterLabel(value)}</option>)}</select>
+    <span className="text-muted">{n === 1 ? 'room with' : 'rooms with'}</span>
+    <select className="input !h-10 w-32" value={bath} onChange={event => setBath(event.target.value)} aria-label={`Bathroom for the new rooms on ${where}`}><option value="SHARED">shared</option><option value="ATTACHED">attached</option></select>
+    <span className="text-muted">{n === 1 ? 'bathroom' : 'bathrooms'}</span>
+    <button id={`add-rooms-${floor}`} type="button" className="btn btn-secondary ml-auto !min-h-10" disabled={full} onClick={() => onAdd(n, Number(seats), bath)} aria-label={`Add ${plural(n, 'room')} to ${where}`}><Plus size={15} aria-hidden="true" />Add {plural(n, 'room')}</button>
+  </div>
+}
+function FloorsEditor({ plan, onChange, invalid }) {
   const setFloors = floors => onChange({ floors })
   const setRoom = (floor, index, next) => setFloors(plan.floors.map((entry, f) => f !== floor ? entry : { rooms: entry.rooms.map((room, i) => i !== index ? room : { ...room, ...next }) }))
   function setFloorCount(value) {
@@ -94,27 +117,26 @@ function FloorsEditor({ plan, onChange }) {
     if (dropped && !window.confirm(`Remove the top ${plural(plan.floors.length - count, 'floor')} and their ${plural(dropped, 'room')}?`)) return
     setFloors(Array.from({ length: count }, (_, floor) => plan.floors[floor] || { rooms: [] }))
   }
-  const addRooms = floor => setFloors(plan.floors.map((entry, f) => f !== floor ? entry : { rooms: [...entry.rooms, ...Array.from({ length: Math.min(40 - entry.rooms.length, Math.max(1, Number(quick.count) || 1)) }, () => blankRoom(Number(quick.seats), quick.bath))] }))
+  const addRooms = (floor, count, seats, bath) => setFloors(plan.floors.map((entry, f) => f !== floor ? entry : { rooms: [...entry.rooms, ...Array.from({ length: Math.min(40 - entry.rooms.length, count) }, () => blankRoom(seats, bath))] }))
   const copyFloor = floor => setFloors(plan.floors.map((entry, f) => f !== floor ? entry : { rooms: plan.floors[floor - 1].rooms.map(room => ({ ...room, key: blankRoom().key, code: '' })) }))
   return <div className="grid gap-5">
-    <div className="flex flex-wrap items-end gap-4"><Field label="Number of floors"><input className="input w-32" type="number" min={1} max={20} step={1} value={plan.floors.length} onChange={event => setFloorCount(event.target.value)} /></Field>
-      <fieldset className="flex flex-wrap items-end gap-2 rounded-xl border border-line bg-raised p-3"><legend className="sr-only">Rooms to add</legend><Field label="Add"><input className="input w-20" type="number" min={1} max={40} value={quick.count} onChange={event => setQuick(current => ({ ...current, count: event.target.value }))} aria-label="How many rooms to add" /></Field><Field label="Seats per room"><select className="input w-28" value={quick.seats} onChange={event => setQuick(current => ({ ...current, seats: event.target.value }))}>{seatSizes.map(seats => <option key={seats} value={seats}>{seaterLabel(seats)}</option>)}</select></Field><Field label="Bathroom"><select className="input w-32" value={quick.bath} onChange={event => setQuick(current => ({ ...current, bath: event.target.value }))}><option value="SHARED">Shared</option><option value="ATTACHED">Attached</option></select></Field></fieldset>
-    </div>
+    <Field label="Number of floors"><input className="input w-32" type="number" min={1} max={20} step={1} value={plan.floors.length} onChange={event => setFloorCount(event.target.value)} /></Field>
     {plan.floors.map((entry, floor) => <section key={floor} aria-label={floorLabel(floor)} className="overflow-hidden rounded-xl border border-line">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-raised px-4 py-3"><h4 className="font-semibold">{floorLabel(floor)} <span className="ml-1 text-sm font-normal text-muted">{plural(entry.rooms.length, 'room')} · {plural(entry.rooms.reduce((sum, room) => sum + room.seats, 0), 'bed')}</span></h4><div className="flex flex-wrap gap-2">{floor > 0 && plan.floors[floor - 1].rooms.length > 0 && <Button type="button" secondary className="!min-h-9 !px-3 !text-xs" onClick={() => copyFloor(floor)}>Same rooms as {floorLabel(floor - 1).toLowerCase()}</Button>}<Button type="button" secondary className="!min-h-9 !px-3 !text-xs" disabled={entry.rooms.length >= 40} onClick={() => addRooms(floor)}><Plus size={14} aria-hidden="true" />Add {plural(Number(quick.count) || 1, 'room')} to {floorLabel(floor).toLowerCase()}</Button></div></div>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-raised px-4 py-3"><h4 className="font-semibold">{floorLabel(floor)} <span className="ml-1 text-sm font-normal text-muted">{plural(entry.rooms.length, 'room')} · {plural(entry.rooms.reduce((sum, room) => sum + room.seats, 0), 'bed')}</span></h4>{floor > 0 && plan.floors[floor - 1].rooms.length > 0 && <Button type="button" secondary className="!min-h-9 !px-3 !text-xs" onClick={() => copyFloor(floor)}>{entry.rooms.length ? 'Replace with' : 'Copy'} the rooms on {floorLabel(floor - 1).toLowerCase()}</Button>}</div>
       {entry.rooms.length ? <div className="overflow-x-auto"><table className="w-full min-w-[560px] text-sm"><thead><tr className="text-left text-xs text-faint"><th scope="col" className="px-4 py-2 font-medium">Room</th><th scope="col" className="px-2 py-2 font-medium">Seats</th><th scope="col" className="px-2 py-2 font-medium">Bathroom</th><th scope="col" className="px-2 py-2 font-medium">Free seats</th>{plan.mode === 'CUSTOM' && <th scope="col" className="px-2 py-2 font-medium">Price of each seat (PKR / month)</th>}<th scope="col"><span className="sr-only">Remove</span></th></tr></thead>
         <tbody>{entry.rooms.map((room, index) => { const name = room.code || autoCode(floor, index); return <tr key={room.key} className="border-t border-line">
           <td className="px-4 py-2"><input className="input !h-10 w-24" maxLength={20} placeholder={autoCode(floor, index)} value={room.code} onChange={event => setRoom(floor, index, { code: event.target.value })} aria-label={`Room ${name} name`} /></td>
           <td className="px-2 py-2"><select className="input !h-10 w-28" value={room.seats} onChange={event => setRoom(floor, index, { seats: Number(event.target.value) })} aria-label={`Room ${name} seats`}>{seatSizes.map(seats => <option key={seats} value={seats}>{seaterLabel(seats)}</option>)}</select></td>
           <td className="px-2 py-2"><select className="input !h-10 w-32" value={room.bath} onChange={event => setRoom(floor, index, { bath: event.target.value })} aria-label={`Room ${name} bathroom`}><option value="SHARED">Shared</option><option value="ATTACHED">Attached</option></select></td>
-          <td className="px-2 py-2"><input className="input !h-10 w-20" type="number" min={0} max={room.seats} placeholder={String(room.seats)} value={room.available} onChange={event => setRoom(floor, index, { available: event.target.value })} aria-label={`Room ${name} free seats`} /></td>
-          {plan.mode === 'CUSTOM' && <td className="px-2 py-2"><div className="flex flex-wrap gap-1.5">{Array.from({ length: room.seats }, (_, seat) => <input key={seat} className="input !h-10 w-24" type="number" min={1} max={10000000} placeholder={`Seat ${seat + 1}`} value={room.seatPrices[seat] ?? ''} onChange={event => setRoom(floor, index, { seatPrices: Object.assign([...room.seatPrices], { [seat]: event.target.value }) })} aria-label={`Room ${name} seat ${seat + 1} price`} />)}</div></td>}
+          <td className="px-2 py-2"><input className="input !h-10 w-20" type="number" min={0} max={room.seats} placeholder={String(room.seats)} id={`room-${floor}-${index}-free`} aria-invalid={invalid === `room-${floor}-${index}-free`} value={room.available} onChange={event => setRoom(floor, index, { available: event.target.value })} aria-label={`Room ${name} free seats`} /></td>
+          {plan.mode === 'CUSTOM' && <td className="px-2 py-2"><div className="flex flex-wrap gap-1.5">{Array.from({ length: room.seats }, (_, seat) => <input key={seat} className="input !h-10 w-24" type="number" min={1} max={10000000} placeholder={`Seat ${seat + 1}`} id={`room-${floor}-${index}-seat-${seat}`} aria-invalid={invalid === `room-${floor}-${index}-seat-${seat}`} value={room.seatPrices[seat] ?? ''} onChange={event => setRoom(floor, index, { seatPrices: Object.assign([...room.seatPrices], { [seat]: event.target.value }) })} aria-label={`Room ${name} seat ${seat + 1} price`} />)}</div></td>}
           <td className="px-2 py-2 text-right"><button type="button" className="grid h-10 w-10 place-items-center rounded-lg text-muted hover:bg-raised hover:text-ink" onClick={() => setFloors(plan.floors.map((item, f) => f !== floor ? item : { rooms: item.rooms.filter((_, i) => i !== index) }))} aria-label={`Remove room ${name}`}><Trash2 size={15} aria-hidden="true" /></button></td>
-        </tr> })}</tbody></table></div> : <p className="px-4 py-5 text-sm text-faint">No rooms on this floor yet. Use “Add rooms” above.</p>}
+        </tr> })}</tbody></table></div> : <p className="px-4 py-5 text-sm text-faint">No rooms on this floor yet.</p>}
+      <AddRooms floor={floor} full={entry.rooms.length >= 40} onAdd={(count, seats, bath) => addRooms(floor, count, seats, bath)} />
     </section>)}
   </div>
 }
-function PricingEditor({ plan, onChange }) {
+function PricingEditor({ plan, onChange, invalid }) {
   const sizes = [...new Set(plan.floors.flatMap(floor => floor.rooms.map(room => room.seats)))].sort()
   const hasAttached = plan.floors.some(floor => floor.rooms.some(room => room.bath === 'ATTACHED'))
   const prices = plan.floors.flatMap(floor => floor.rooms.flatMap(room => seatPrices(room, plan))).filter(price => price > 0)
@@ -125,7 +147,7 @@ function PricingEditor({ plan, onChange }) {
   }
   return <div className="grid gap-5">
     <div role="radiogroup" aria-label="How rooms are priced" className="grid gap-3 sm:grid-cols-2">{[['STANDARD', 'Standard rates', 'One bed price for each room size, plus an extra charge for an attached bathroom.'], ['CUSTOM', 'Price each seat', 'Set the price of every seat in every room yourself, in the room list above.']].map(([value, title, text]) => <label key={value} className={`flex cursor-pointer gap-3 rounded-xl border p-4 transition-colors ${plan.mode === value ? 'border-accent bg-accent-soft' : 'border-line hover:border-line-strong'}`}><input type="radio" name="pricing-mode" value={value} checked={plan.mode === value} onChange={() => setMode(value)} className="mt-1" /><span><span className="block font-semibold">{title}</span><span className="mt-1 block text-sm text-muted">{text}</span></span></label>)}</div>
-    {plan.mode === 'STANDARD' && (sizes.length ? <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">{sizes.map(seats => <Field key={seats} label={`${seaterLabel(seats)} bed (PKR / month)`}><input className="input" type="number" min={1} max={10000000} value={plan.rates[seats]} onChange={event => onChange({ rates: { ...plan.rates, [seats]: event.target.value } })} /></Field>)}{hasAttached && <Field label="Attached bathroom extra, per bed"><input className="input" type="number" min={0} max={10000000} placeholder="0" value={plan.attachedBathExtra} onChange={event => onChange({ attachedBathExtra: event.target.value })} /></Field>}</div> : <p className="text-sm text-faint">Add rooms first.</p>)}
+    {plan.mode === 'STANDARD' && (sizes.length ? <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">{sizes.map(seats => <Field key={seats} label={`${seaterLabel(seats)} bed (PKR / month)`}><input id={`rate-${seats}`} aria-invalid={invalid === `rate-${seats}`} className="input" type="number" min={1} max={10000000} value={plan.rates[seats]} onChange={event => onChange({ rates: { ...plan.rates, [seats]: event.target.value } })} /></Field>)}{hasAttached && <Field label="Attached bathroom extra, per bed"><input className="input" type="number" min={0} max={10000000} placeholder="0" value={plan.attachedBathExtra} onChange={event => onChange({ attachedBathExtra: event.target.value })} /></Field>}</div> : <p className="text-sm text-faint">Add rooms first.</p>)}
     <p aria-live="polite" className="rounded-xl bg-raised px-4 py-3 text-sm">{prices.length ? <>Students will see <strong className="tabular-nums">PKR {Math.min(...prices).toLocaleString()}{Math.max(...prices) > Math.min(...prices) ? ` – ${Math.max(...prices).toLocaleString()}` : ''}</strong> per bed per month.</> : <span className="text-muted">Enter prices to see the range students will see.</span>}</p>
   </div>
 }
@@ -134,7 +156,8 @@ export function OwnerListings() {
   const list = useResource(`/owner/hostels?page=${page}`)
   const [editing, setEditing] = useState(undefined)
   const [generation, setGeneration] = useState(0)
-  return <Page eyebrow="Property management" title="Your hostels." description="Save a draft, upload photos, then submit it for review." action={<button className="btn btn-accent" onClick={() => { setEditing(null); setGeneration(value => value + 1) }}><Plus size={16} aria-hidden="true" />Create listing</button>}><ErrorNotice retry={list.reload}>{list.error}</ErrorNotice>{editing !== undefined ? <ListingEditor key={generation} initial={editing} onClose={() => { setEditing(undefined); list.reload() }} onSaved={list.reload} /> : list.loading ? <Loading /> : <><div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">{list.result?.data.map(hostel => <article key={hostel._id} className="lift rise flex flex-col overflow-hidden rounded-2xl border border-line bg-surface"><div className="p-2"><Cover hostel={hostel} className="h-48 w-full" /></div><div className="flex flex-1 flex-col p-5 pt-3"><div className="flex flex-wrap items-start justify-between gap-3"><h2 className="text-lg font-semibold tracking-tight">{hostel.name}</h2><Status value={hostel.status} /></div><p className="mt-1.5 flex items-center gap-1.5 text-sm text-muted"><MapPin size={14} aria-hidden="true" />{hostel.city}</p><p className="mt-3 text-sm">{hostel.seaterRooms?.length ? <span className="text-muted">from </span> : null}<span className="font-semibold">PKR {hostel.price.toLocaleString()}</span><span className="text-muted">{hostel.seaterRooms?.length ? " per bed" : " / month"} · {hostel.beds} beds</span></p>{hostel.moderationReason && <p className="mt-3 rounded-lg bg-raised px-3 py-2 text-sm text-limited">Review note: {hostel.moderationReason}</p>}<div className="mt-auto pt-5"><Button secondary className="w-full" onClick={() => { setEditing(hostel); setGeneration(value => value + 1) }}>Manage listing</Button></div></div></article>)}</div>{list.result?.data.length === 0 && <Empty>You have no listings. Create your first hostel to get started.</Empty>}<Pagination pagination={list.result?.pagination} onChange={setPage} /></>}</Page>
+  const { toast, show, clear } = useToast()
+  return <Page eyebrow="Property management" title="Your hostels." description="Save a draft, upload photos, then submit it for review." action={<button className="btn btn-accent" onClick={() => { clear(); setEditing(null); setGeneration(value => value + 1) }}><Plus size={16} aria-hidden="true" />Create listing</button>}><Toast toast={toast} onClose={clear} /><ErrorNotice retry={list.reload}>{list.error}</ErrorNotice>{editing !== undefined ? <ListingEditor key={generation} initial={editing} onClose={message => { setEditing(undefined); list.reload(); window.scrollTo({ top: 0 }); if (message) show('success', message) }} onSaved={list.reload} /> : list.loading ? <Loading /> : <><div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">{list.result?.data.map(hostel => <article key={hostel._id} className="lift rise flex flex-col overflow-hidden rounded-2xl border border-line bg-surface"><div className="p-2"><Cover hostel={hostel} className="h-48 w-full" /></div><div className="flex flex-1 flex-col p-5 pt-3"><div className="flex flex-wrap items-start justify-between gap-3"><h2 className="text-lg font-semibold tracking-tight">{hostel.name}</h2><Status value={hostel.status} /></div><p className="mt-1.5 flex items-center gap-1.5 text-sm text-muted"><MapPin size={14} aria-hidden="true" />{hostel.city}</p><p className="mt-3 text-sm"><span className="font-semibold tabular-nums">{priceRange(hostel)}</span><span className="text-muted">{hostel.seaterRooms?.length ? ' per bed' : ' / month'} · {hostel.beds} beds</span></p>{hostel.moderationReason && <p className="mt-3 rounded-lg bg-raised px-3 py-2 text-sm text-limited">Review note: {hostel.moderationReason}</p>}<div className="mt-auto pt-5"><Button secondary className="w-full" onClick={() => { clear(); setEditing(hostel); setGeneration(value => value + 1) }}>Manage listing</Button></div></div></article>)}</div>{list.result?.data.length === 0 && <Empty>You have no listings. Create your first hostel to get started.</Empty>}<Pagination pagination={list.result?.pagination} onChange={setPage} /></>}</Page>
 }
 // What students will see: the plan the API generated from the saved floors and rooms.
 function PlanPreview({ hostel, dirty }) {
@@ -168,30 +191,59 @@ function ListingEditor({ initial, onClose, onSaved }) {
   const [form, setForm] = useState(() => listingForm(initial))
   const [dirty, setDirty] = useState(false)
   const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
-  const [notice, setNotice] = useState('')
+  const navigate = useNavigate()
+  const { toast, show, clear } = useToast()
+  const [invalid, setInvalid] = useState('')
+  const firstInvalid = useRef(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const suspended = hostel?.status === 'SUSPENDED'
-  const change = next => { setForm(current => ({ ...current, ...next(current) })); setDirty(true); setNotice('') }
+  const change = next => { setForm(current => ({ ...current, ...next(current) })); setDirty(true); setInvalid('') }
   const update = key => event => { const { value } = event.target; change(() => ({ [key]: value })) }
   const updatePlan = next => change(current => ({ plan: { ...current.plan, ...next } }))
   const toggleFacility = item => change(current => ({ facilities: current.facilities.includes(item) ? current.facilities.filter(value => value !== item) : [...current.facilities, item] }))
-  const problem = planProblem(form.plan)
-  async function perform(action, message) {
-    setBusy(true); setError(''); setNotice('')
-    try { const result = await action(); if (result?.data) setHostel(result.data); setNotice(message); onSaved(); return result }
-    catch (cause) { setError(cause.message); return null } finally { setBusy(false) }
+  // Scrolls a field to the middle of the screen, focuses it and marks it until the owner changes something.
+  function goTo(id, mark = true) {
+    const element = document.getElementById(id)
+    if (!element) return
+    element.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center' })
+    element.focus({ preventScroll: true })
+    if (mark) setInvalid(id)
+  }
+  async function perform(action, success, failure) {
+    setBusy(true); clear()
+    try { const result = await action(); if (result?.data) setHostel(result.data); if (success) show('success', ...[].concat(success)); onSaved(); return result }
+    catch (cause) { (failure || (() => show('error', cause.message)))(cause); return null } finally { setBusy(false) }
+  }
+  // The browser's own required-field check runs first; tell the owner which field it stopped on.
+  function missingField(event) {
+    if (firstInvalid.current) return
+    firstInvalid.current = true
+    setTimeout(() => { firstInvalid.current = false })
+    const field = event.target
+    const label = (field.labels?.[0]?.textContent || field.getAttribute('aria-label') || 'this field').trim()
+    show('error', field.validity.valueMissing ? `Fill in “${label}” to save.` : `Check “${label}”: ${field.validationMessage}`)
+    if (field.id) goTo(field.id, false)
   }
   async function save(event) {
     event.preventDefault()
-    if (problem) { setError(problem); return }
-    const result = await perform(() => api(hostel ? `/hostels/${hostel._id}` : '/hostels', { method: hostel ? 'PUT' : 'POST', body: listingBody(form) }), 'Saved. Now add a photo of each room size, then submit it for review.')
+    const problem = planProblem(form.plan)
+    if (problem) { show('error', problem.message); goTo(problem.field); return }
+    const created = !hostel
+    const result = await perform(() => api(hostel ? `/hostels/${hostel._id}` : '/hostels', { method: hostel ? 'PUT' : 'POST', body: listingBody(form) }),
+      created ? ['Draft saved. Next, add a photo of each room size, then submit it for review.', { label: 'Go to photos', run: () => goTo('listing-photos', false) }] : 'Draft saved. Your changes are stored.')
     if (result) setDirty(false)
+  }
+  async function submitForReview() {
+    await perform(() => api(`/hostels/${hostel._id}/submit`, { method: 'POST' }), null, cause => {
+      if (/photo/i.test(cause.message)) { show('error', cause.message, { label: 'Go to photos', run: () => goTo('listing-photos', false) }); goTo('listing-photos', false) }
+      else if (/mobile number/i.test(cause.message)) show('error', cause.message, { label: 'Verify your number', run: () => navigate('/verify-phone') })
+      else show('error', cause.message)
+    }).then(result => { if (result) onClose(`“${result.data.name}” was submitted for review. You'll see it marked approved once an administrator checks it.`) })
   }
   async function upload(event, seats) {
     const files = Array.from(event.target.files || []); event.target.value = ''
     if (!files.length) return
-    if ((hostel.images.length + files.length) > 10 || files.some(file => file.size > 5 * 1024 * 1024 || !['image/jpeg', 'image/png', 'image/webp'].includes(file.type))) { setError('Choose JPEG, PNG or WebP files up to 5 MiB each, with at most 10 photos per listing.'); return }
+    if ((hostel.images.length + files.length) > 10 || files.some(file => file.size > 5 * 1024 * 1024 || !['image/jpeg', 'image/png', 'image/webp'].includes(file.type))) { show('error', 'Choose JPEG, PNG or WebP files up to 5 MiB each, with at most 10 photos per listing.'); return }
     const body = new FormData(); body.append('seats', String(seats)); files.forEach(file => body.append('images', file))
     await perform(() => api(`/hostels/${hostel._id}/images`, { method: 'POST', body }), `${seaterLabel(seats)} photo uploaded. The listing is now a draft.`)
   }
@@ -204,18 +256,18 @@ function ListingEditor({ initial, onClose, onSaved }) {
   const photoTile = image => <div key={image.publicId} className="overflow-hidden rounded-xl border border-line bg-raised"><div className="relative"><img src={image.url} alt={image.seats ? `${seaterLabel(image.seats)} room` : 'Hostel photo'} className="h-36 w-full object-cover" />{image.publicId === hostel.coverImage && <span className="absolute left-3 top-3 rounded-full bg-accent px-2.5 py-1 text-[11px] font-semibold text-on-accent">Cover</span>}</div><div className="flex gap-2 p-2"><Button secondary className="flex-1 !min-h-9 !px-2 !text-xs" disabled={locked || image.publicId === hostel.coverImage} onClick={() => arrange(hostel.images, image.publicId)}>{image.publicId === hostel.coverImage ? 'Cover photo' : 'Make cover'}</Button><Button secondary className="!min-h-9 !px-2 !text-xs" disabled={locked} onClick={() => removePhoto(image)}>Remove</Button></div></div>
   return <div className="space-y-6">
     <div className="flex flex-wrap items-center justify-between gap-3"><Button secondary disabled={busy} onClick={() => { if (!dirty || window.confirm('Discard unsaved changes?')) onClose() }}>Back to listings</Button>{hostel && <Status value={hostel.status} />}</div>
-    <ErrorNotice>{error}</ErrorNotice><Notice>{notice}</Notice>
+    <Toast toast={toast} onClose={clear} />
     {suspended && <ErrorNotice>This listing is suspended. An administrator must restore it before you can edit or submit it.</ErrorNotice>}
     {hostel?.moderationReason && <p className="rounded-xl border border-line bg-raised px-4 py-3 text-sm text-limited">Review note: {hostel.moderationReason}</p>}
-    <form onSubmit={save} className="panel rise !p-0">
+    <form onSubmit={save} onInvalidCapture={missingField} className="panel rise !p-0">
       <div className="border-b border-line px-6 py-5"><h2 className="text-lg font-semibold tracking-tight">{hostel ? 'Listing details' : 'New listing'}</h2><p className="mt-1 text-sm text-muted">Students see these details on your listing page.</p></div>
       <fieldset disabled={busy || suspended}>
         <Step number={1} title="Hostel name" htmlFor="listing-name"><input id="listing-name" className="input" required maxLength={150} value={form.name} onChange={update('name')} /></Step>
         <Step number={2} title="City" htmlFor="listing-city"><input id="listing-city" className="input" required maxLength={100} value={form.city} onChange={update('city')} placeholder="Lahore" /></Step>
         <Step number={3} title="Address" htmlFor="listing-address"><input id="listing-address" className="input" required maxLength={300} value={form.address} onChange={update('address')} placeholder="Street, area" /></Step>
         <Step number={4} title="Description" hint="Tell students what living here is like." htmlFor="listing-description"><textarea id="listing-description" className="input min-h-28" required maxLength={5000} value={form.description} onChange={update('description')} /></Step>
-        <Step number={5} title="Floors and rooms" hint="Add each floor's rooms, how many seats each has and whether its bathroom is attached or shared. Leave free seats empty if the whole room is free. We draw your floor plan from this automatically."><FloorsEditor plan={form.plan} onChange={updatePlan} /></Step>
-        <Step number={6} title="Pricing" hint="Students see your listing priced from the cheapest bed up to the dearest."><PricingEditor plan={form.plan} onChange={updatePlan} /></Step>
+        <Step number={5} title="Floors and rooms" hint="Set how many floors you have, then add the rooms on each one. Leave “Free seats” empty when a whole room is free. We draw your floor plan from this automatically."><FloorsEditor plan={form.plan} onChange={updatePlan} invalid={invalid} /></Step>
+        <Step number={6} title="Pricing" hint="Students see your listing priced from the cheapest bed up to the dearest."><PricingEditor plan={form.plan} onChange={updatePlan} invalid={invalid} /></Step>
         <Step number={7} title="Who can stay?"><div role="radiogroup" aria-label="Residents" className="flex flex-wrap gap-2">{genderOptions.map(([value, label]) => <label key={value} className={`btn min-h-10 cursor-pointer px-4 ${form.gender === value ? 'btn-primary' : 'btn-secondary'}`}><input type="radio" name="gender" value={value} checked={form.gender === value} onChange={update('gender')} className="sr-only" />{label}</label>)}</div></Step>
         <Step number={8} title="Facilities">
           <div className="grid gap-2 sm:grid-cols-3">{facilityOptions.map(item => <label key={item} className="flex min-h-10 cursor-pointer items-center gap-2.5 rounded-lg border border-line px-3 text-sm"><input type="checkbox" checked={form.facilities.includes(item)} onChange={() => toggleFacility(item)} />{item}</label>)}</div>
@@ -226,14 +278,14 @@ function ListingEditor({ initial, onClose, onSaved }) {
       </fieldset>
       <div className="flex flex-wrap items-center justify-between gap-4 border-t border-line px-6 py-4"><p className="max-w-md text-xs leading-5 text-muted">Editing an approved listing returns it to draft and removes it from public search until it is approved again.</p><Button disabled={busy || suspended}>{busy ? 'Please wait…' : hostel ? 'Save changes' : 'Save and continue'}</Button></div>
     </form>
-    {hostel && <section className="panel !p-0">
+    {hostel && <section id="listing-photos" tabIndex={-1} className="panel !p-0 outline-none">
       <div className="border-b border-line px-6 py-5"><h2 className="text-lg font-semibold tracking-tight"><span className="mr-2 tabular-nums text-xs text-faint">11</span>Room photos</h2><p className="mt-1 text-sm text-muted">Upload at least one photo of each room size you have. JPEG, PNG or WebP · up to 5 MiB · 10 photos in total.</p>{dirty && <p className="mt-2 text-sm text-limited">Save your changes before managing photos.</p>}</div>
       {savedTypes.length ? savedTypes.map(type => { const photos = hostel.images.filter(image => image.seats === type.seats); return <div key={type.seats} className="border-b border-line px-6 py-5 last:border-b-0"><div className="flex flex-wrap items-center justify-between gap-3"><h3 className="font-semibold">{seaterLabel(type.seats)} rooms <span className={`ml-2 text-xs font-normal ${photos.length ? 'text-open' : 'text-limited'}`}>{photos.length ? `${photos.length} photo${photos.length > 1 ? 's' : ''}` : 'Photo needed'}</span></h3><label className={`btn btn-secondary ${locked ? 'pointer-events-none opacity-50' : 'cursor-pointer'}`}><ImagePlus size={16} aria-hidden="true" />Add {seaterLabel(type.seats)} photo<input aria-label={`Upload ${seaterLabel(type.seats)} room photos`} type="file" multiple accept="image/jpeg,image/png,image/webp" disabled={locked} onChange={event => upload(event, type.seats)} className="sr-only" /></label></div>{photos.length > 0 && <div className="mt-4 grid gap-3 sm:grid-cols-3 lg:grid-cols-4">{photos.map(photoTile)}</div>}</div> }) : <div className="px-6 py-5"><Empty>Save your floors and rooms first.</Empty></div>}
       {otherPhotos.length > 0 && <div className="border-t border-line px-6 py-5"><h3 className="font-semibold">Other photos</h3><div className="mt-4 grid gap-3 sm:grid-cols-3 lg:grid-cols-4">{otherPhotos.map(photoTile)}</div></div>}
     </section>}
     {hostel?.rooms?.length > 0 && <PlanPreview hostel={hostel} dirty={dirty} />}
     {hostel && <VideoTour hostel={hostel} locked={locked} perform={perform} />}
-    {hostel && <section className="panel flex flex-wrap items-center justify-between gap-4"><div><h2 className="text-lg font-semibold tracking-tight">Review</h2><p className="mt-1 text-sm text-muted">{dirty ? 'Save your changes before submitting.' : missingPhotos.length ? `Add a photo of your ${missingPhotos.map(type => seaterLabel(type.seats)).join(', ')} room${missingPhotos.length > 1 ? 's' : ''} to submit.` : 'An administrator checks every listing before students can see it.'}</p></div><button className="btn btn-accent" disabled={locked || !hostel.images.length || missingPhotos.length > 0 || !['DRAFT', 'REJECTED'].includes(hostel.status)} onClick={() => perform(() => api(`/hostels/${hostel._id}/submit`, { method: 'POST' }), 'Submitted for administrator review.')}>Submit for review</button></section>}
-    {hostel && <section className="rounded-2xl border border-dashed border-line-strong p-6"><div className="flex flex-wrap items-center justify-between gap-4"><div><h2 className="font-semibold">Delete listing</h2><p className="mt-1 text-sm text-muted">Removes it from your account and public search. Conversations stay available.</p></div><Button secondary disabled={busy} onClick={() => setConfirmDelete(true)}><Trash2 size={16} aria-hidden="true" />Delete listing</Button></div>{confirmDelete && <div className="fade mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-line bg-raised p-4"><p className="mr-auto text-sm text-danger">Remove this listing from your account and public search?</p><Button disabled={busy} onClick={async () => { setBusy(true); setError(''); try { await api(`/hostels/${hostel._id}`, { method: 'DELETE' }); onClose() } catch (cause) { setError(cause.message); setBusy(false) } }}>Confirm deletion</Button><Button secondary disabled={busy} onClick={() => setConfirmDelete(false)}>Cancel</Button></div>}</section>}
+    {hostel && <section className="panel flex flex-wrap items-center justify-between gap-4"><div><h2 className="text-lg font-semibold tracking-tight">Review</h2><p className="mt-1 text-sm text-muted">{dirty ? 'Save your changes before submitting.' : missingPhotos.length ? `Add a photo of your ${missingPhotos.map(type => seaterLabel(type.seats)).join(', ')} room${missingPhotos.length > 1 ? 's' : ''} to submit.` : 'An administrator checks every listing before students can see it.'}</p></div><button className="btn btn-accent" disabled={locked || !hostel.images.length || missingPhotos.length > 0 || !['DRAFT', 'REJECTED'].includes(hostel.status)} onClick={submitForReview}>Submit for review</button></section>}
+    {hostel && <section className="rounded-2xl border border-dashed border-line-strong p-6"><div className="flex flex-wrap items-center justify-between gap-4"><div><h2 className="font-semibold">Delete listing</h2><p className="mt-1 text-sm text-muted">Removes it from your account and public search. Conversations stay available.</p></div><Button secondary disabled={busy} onClick={() => setConfirmDelete(true)}><Trash2 size={16} aria-hidden="true" />Delete listing</Button></div>{confirmDelete && <div className="fade mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-line bg-raised p-4"><p className="mr-auto text-sm text-danger">Remove this listing from your account and public search?</p><Button disabled={busy} onClick={async () => { setBusy(true); clear(); try { await api(`/hostels/${hostel._id}`, { method: 'DELETE' }); onClose(`“${hostel.name}” was deleted.`) } catch (cause) { show('error', cause.message); setBusy(false) } }}>Confirm deletion</Button><Button secondary disabled={busy} onClick={() => setConfirmDelete(false)}>Cancel</Button></div>}</section>}
   </div>
 }

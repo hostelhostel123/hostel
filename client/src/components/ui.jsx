@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ImageOff } from 'lucide-react'
+import { CircleAlert, CircleCheck, ImageOff, X } from 'lucide-react'
 import { api } from '../services/api'
 
 export function useResource(path) {
@@ -43,4 +43,32 @@ export function StatTile({ label, value, hint }) { return <div className="panel"
 export function Cover({ hostel, className = 'h-52 w-full' }) {
   const image = hostel.images?.find(item => item.publicId === hostel.coverImage) || hostel.images?.[0]
   return image ? <img src={image.url} alt={hostel.name} loading="lazy" className={`${className} rounded-xl object-cover`} /> : <div className={`${className} grid place-items-center rounded-xl bg-raised text-xs text-faint`}><span className="flex items-center gap-2"><ImageOff size={14} aria-hidden="true" />No photos yet</span></div>
+}
+// Feedback for an action the person just took, shown where they are rather than at the top of a long page.
+// Successes fade after a few seconds; problems stay until dismissed. `action` adds one follow-up button.
+export function Toast({ toast, onClose }) {
+  useEffect(() => {
+    if (!toast || toast.tone === 'error') return
+    const timer = setTimeout(onClose, 7000)
+    return () => clearTimeout(timer)
+  }, [toast]) // eslint-disable-line react-hooks/exhaustive-deps
+  if (!toast) return null
+  const error = toast.tone === 'error'
+  const Icon = error ? CircleAlert : CircleCheck
+  return <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[70] flex justify-center p-4 sm:p-6">
+    <div key={toast.id} role={error ? 'alert' : 'status'} className="rise pointer-events-auto flex w-full max-w-lg items-start gap-3 rounded-2xl border border-line bg-surface p-4 shadow-[0_24px_60px_-20px_rgba(0,0,0,.45)]">
+      <Icon size={20} aria-hidden="true" className={`mt-0.5 shrink-0 ${error ? 'text-danger' : 'text-success'}`} />
+      <div className="min-w-0 flex-1"><p className="text-sm font-medium leading-6">{toast.text}</p>{toast.action && <button type="button" onClick={() => { toast.action.run(); onClose() }} className="text-link mt-1 text-sm">{toast.action.label}</button>}</div>
+      <button type="button" onClick={onClose} aria-label="Dismiss" className="-m-1.5 grid h-9 w-9 shrink-0 place-items-center rounded-lg text-muted hover:bg-raised hover:text-ink"><X size={16} aria-hidden="true" /></button>
+    </div>
+  </div>
+}
+let toastId = 0
+export function useToast() {
+  const [toast, setToast] = useState(null)
+  return {
+    toast,
+    show: (tone, text, action) => setToast({ id: ++toastId, tone, text, action }),
+    clear: () => setToast(null),
+  }
 }

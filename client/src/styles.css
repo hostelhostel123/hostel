@@ -93,6 +93,7 @@
   .input::placeholder { color: var(--color-faint); }
   .input:hover { border-color: var(--color-line-strong); }
   .input:focus { border-color: var(--color-accent-ink); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 22%, transparent); }
+  .input[aria-invalid='true'] { border-color: var(--color-danger); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-danger) 18%, transparent); }
   .input[readonly] { background: var(--color-raised); color: var(--color-muted); }
   .input[type='file'] { height: auto; padding: 10px; }
   textarea.input { height: auto; min-height: 120px; padding-block: 12px; resize: vertical; line-height: 1.6; }
