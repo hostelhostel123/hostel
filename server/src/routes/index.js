@@ -73,6 +73,7 @@ router.post('/hostels', ...owner, validate(hostelSchema), hostels.create);
 router.put('/hostels/:id', ...owner, validId, validate(hostelSchema), hostels.update);
 router.delete('/hostels/:id', ...owner, validId, hostels.remove);
 router.post('/hostels/:id/submit', ...owner, validId, hostels.submit);
+router.put('/hostels/:id/video', ...owner, validId, validate(z.object({ url: z.string().trim().max(300) }).strict()), hostels.setVideo);
 router.post('/hostels/:id/favorite', ...student, validId, hostels.favorite);
 router.delete('/hostels/:id/favorite', ...student, validId, hostels.favorite);
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024, files: 10, fields: 1 } });

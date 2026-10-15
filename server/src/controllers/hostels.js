@@ -45,6 +45,30 @@ export async function update(req, res) {
   await hostel.save();
   res.json({ data: hostel });
 }
+// Accepts watch, share (youtu.be), Shorts, embed and live links, or a bare 11-character video ID.
+export function youtubeIdFrom(value) {
+  const text = value.trim();
+  if (/^[A-Za-z0-9_-]{11}$/.test(text)) return text;
+  let url;
+  try { url = new URL(/^https?:\/\//i.test(text) ? text : `https://${text}`); } catch { return null; }
+  const host = url.hostname.replace(/^(www|m|music)\./, '');
+  const id = host === 'youtu.be' ? url.pathname.slice(1).split('/')[0]
+    : ['youtube.com', 'youtube-nocookie.com'].includes(host) ? (url.pathname === '/watch' ? url.searchParams.get('v') : url.pathname.match(/^\/(?:shorts|embed|live|v)\/([^/]+)/)?.[1])
+    : null;
+  return id && /^[A-Za-z0-9_-]{11}$/.test(id) ? id : null;
+}
+export async function setVideo(req, res) {
+  const hostel = await ownedHostel(req.params.id, req.user);
+  requireEditable(hostel);
+  const { url } = req.validated.body;
+  const youtubeId = url ? youtubeIdFrom(url) : undefined;
+  if (url && !youtubeId) throw new HttpError(400, 'Paste a YouTube video link, like https://youtu.be/abc123XYZ_0');
+  if (youtubeId === hostel.youtubeId) return res.json({ data: hostel });
+  hostel.youtubeId = youtubeId;
+  resetReview(hostel);
+  await hostel.save();
+  res.json({ data: hostel });
+}
 export async function submit(req, res) {
   if (phoneVerificationRequired(req.user)) throw new HttpError(403, 'Verify your mobile number before submitting a listing');
   const hostel = await ownedHostel(req.params.id, req.user);

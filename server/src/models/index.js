@@ -46,6 +46,8 @@ const hostelSchema = new Schema({
   mealsPerDay: { type: Number, min: 0, max: 3 }, universities: { type: [String], default: undefined },
   rooms: { type: [roomSchema], default: undefined }, areas: { type: [areaSchema], default: undefined },
   images: [{ _id: false, publicId: String, url: String, seats: { type: Number, min: 1, max: 5 } }], coverImage: String,
+  // Video tours are hosted on YouTube (usually unlisted); only the video ID is kept here.
+  youtubeId: { type: String, match: /^[A-Za-z0-9_-]{11}$/ },
   status: { type: String, enum: ['DRAFT', 'PENDING', 'APPROVED', 'REJECTED', 'SUSPENDED'], default: 'DRAFT' },
   featured: { type: Boolean, default: false },
   moderationReason: String, moderatedBy: { type: Schema.Types.ObjectId, ref: 'User' },

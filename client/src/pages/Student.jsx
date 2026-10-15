@@ -207,6 +207,7 @@ export function HostelDetail() {
         </aside>
       </div>
       {hasSeaters(hostel) && <SeaterRooms hostel={hostel} />}
+      {hostel.youtubeId && <section className="mt-14"><h2 className="text-lg font-semibold tracking-tight">Video tour</h2><div className="mt-5 aspect-video w-full max-w-3xl overflow-hidden rounded-2xl border border-line bg-raised"><iframe className="h-full w-full" src={`https://www.youtube-nocookie.com/embed/${hostel.youtubeId}`} title={`${hostel.name} video tour`} loading="lazy" allow="accelerometer; encrypted-media; gyroscope; picture-in-picture" allowFullScreen /></div></section>}
       {hasPlan(hostel) ? <RoomPicker hostel={hostel} /> : !hasSeaters(hostel) && <section className="mt-14 rounded-2xl border border-dashed border-line-strong p-8 text-center"><p className="text-lg font-semibold tracking-tight">Floor plan coming soon</p><p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted">This owner hasn't published a room-by-room plan yet. {hostel.beds} beds are listed at {formatPrice(hostel.price)} a month. Message the owner to ask about specific rooms.</p></section>}
     </>}
   </main>
