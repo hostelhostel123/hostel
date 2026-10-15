@@ -129,8 +129,8 @@ function RoomPicker({ hostel }) {
     <div className="overflow-hidden rounded-[22px] bg-plan shadow-[0_30px_80px_-40px_rgba(14,19,23,.7)] lg:grid lg:grid-cols-[1fr_340px]">
       <div className="min-w-0 border-plan-grid lg:border-r">
         <div className="flex flex-wrap items-center justify-between gap-4 border-b border-plan-grid px-5 py-4"><FloorTabs floors={floors} floor={floor} onChange={changeFloor} /><PlanLegend /></div>
-        <div className="overflow-x-auto bg-[linear-gradient(var(--color-plan-grid)_1px,transparent_1px),linear-gradient(90deg,var(--color-plan-grid)_1px,transparent_1px)] bg-[size:24px_24px] p-5 sm:p-8">
-          <p className="mb-3 font-mono text-[11px] uppercase tracking-wider text-[#8796a3] sm:hidden">Swipe to see the whole floor</p><div key={floor} className="fade relative min-w-[560px]">
+        <div className="overflow-x-auto p-2 sm:p-4">
+          <p className="mb-1 px-3 pt-2 font-mono text-[11px] uppercase tracking-wider text-[#8796a3] sm:hidden">Swipe to see the whole floor</p><div key={floor} className="fade relative min-w-[680px]">
             <FloorPlan rooms={hostel.rooms.filter(onFloor)} areas={(hostel.areas || []).filter(onFloor)} selected={selected} onSelect={choose} />
           </div>
         </div>
