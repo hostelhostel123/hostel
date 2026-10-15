@@ -51,6 +51,8 @@ export async function submit(req, res) {
   requireEditable(hostel);
   if (!['DRAFT', 'REJECTED'].includes(hostel.status)) throw new HttpError(409, 'Listing is already submitted');
   if (!hostel.images.length) throw new HttpError(400, 'Upload at least one image before submitting');
+  const missing = (hostel.seaterRooms || []).filter(type => !hostel.images.some(image => image.seats === type.seats));
+  if (missing.length) throw new HttpError(400, `Upload a photo of your ${missing.map(type => `${type.seats}-seater`).join(', ')} room${missing.length > 1 ? 's' : ''} before submitting`);
   hostel.status = 'PENDING';
   await hostel.save();
   res.json({ data: hostel });
