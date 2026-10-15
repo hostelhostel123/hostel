@@ -348,3 +348,34 @@ test('without Cloudinary, photos are shrunk to WebP, stored in MongoDB and serve
   assert.equal(await ImageFile.countDocuments(), 0);
   assert.equal((await request(app).get(path)).status, 404);
 });
+
+test('listings record rooms by size with bed prices and need a photo of each room size', async () => {
+  const { default: sharp } = await import('sharp');
+  const owner = await account('OWNER', 'seaterowner');
+  const details = { name: 'Seater House', city: 'Lahore', address: 'Johar Town', description: 'Rooms near campus', floors: 3, totalRooms: 10, gender: 'MALE', amenities: ['WiFi'], mealsPerDay: 2, universities: ['UCP', 'PU'] };
+  const seaterRooms = [{ seats: 1, rooms: 2, pricePerBed: 25000 }, { seats: 2, rooms: 4, pricePerBed: 18000 }, { seats: 3, rooms: 0, pricePerBed: 0 }];
+  assert.equal((await write(owner.agent, 'post', '/hostels', { ...details, seaterRooms: [{ seats: 1, rooms: 6, pricePerBed: 1 }, { seats: 2, rooms: 5, pricePerBed: 1 }] })).status, 400);
+  assert.equal((await write(owner.agent, 'post', '/hostels', { ...details, seaterRooms: [{ seats: 2, rooms: 3, pricePerBed: 0 }] })).status, 400);
+  assert.equal((await write(owner.agent, 'post', '/hostels', { ...details, seaterRooms: [{ seats: 2, rooms: 1, pricePerBed: 1 }, { seats: 2, rooms: 1, pricePerBed: 1 }] })).status, 400);
+  assert.equal((await write(owner.agent, 'post', '/hostels', { ...details, seaterRooms: [{ seats: 2, rooms: 0, pricePerBed: 1 }] })).status, 400);
+  const created = await write(owner.agent, 'post', '/hostels', { ...details, seaterRooms });
+  assert.equal(created.status, 201, JSON.stringify(created.body));
+  const hostel = created.body.data;
+  assert.deepEqual(hostel.seaterRooms.map(type => type.seats), [1, 2]);
+  assert.equal(hostel.price, 18000);
+  assert.equal(hostel.beds, 10);
+  assert.equal(hostel.mealsPerDay, 2);
+  assert.deepEqual(hostel.universities, ['UCP', 'PU']);
+
+  const photo = await sharp({ create: { width: 400, height: 300, channels: 3, background: '#a87' } }).jpeg().toBuffer();
+  const uploadFor = seats => owner.agent.post(`/api/hostels/${hostel._id}/images`).set('Origin', origin).set('X-Requested-With', 'HostelHub').field('seats', String(seats)).attach('images', photo, { filename: 'room.jpg', contentType: 'image/jpeg' });
+  assert.equal((await uploadFor(3)).status, 400);
+  const first = await uploadFor(1);
+  assert.equal(first.status, 201, JSON.stringify(first.body));
+  assert.equal(first.body.data.images[0].seats, 1);
+  const blocked = await write(owner.agent, 'post', `/hostels/${hostel._id}/submit`);
+  assert.equal(blocked.status, 400);
+  assert.match(blocked.body.error.message, /2-seater/);
+  assert.equal((await uploadFor(2)).status, 201);
+  assert.equal((await write(owner.agent, 'post', `/hostels/${hostel._id}/submit`)).body.data.status, 'PENDING');
+});

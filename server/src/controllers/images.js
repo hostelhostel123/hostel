@@ -7,10 +7,12 @@ export async function upload(req, res) {
   const hostel = await ownedHostel(req.params.id, req.user);
   requireEditable(hostel);
   if (!req.files?.length || hostel.images.length + req.files.length > 10) throw new HttpError(400, 'Provide images; a listing can have at most 10');
+  const { seats } = req.validated.body;
+  if (seats && !hostel.seaterRooms?.some(type => type.seats === seats)) throw new HttpError(400, `This hostel has no ${seats}-seater rooms`);
   const added = [];
   try {
     const baseUrl = `${req.protocol}://${req.get('host')}`;
-    for (const file of req.files) added.push(await uploadImage(file, baseUrl));
+    for (const file of req.files) added.push({ ...await uploadImage(file, baseUrl), ...(seats && { seats }) });
     hostel.images.push(...added);
     hostel.coverImage ||= hostel.images[0].publicId;
     resetReview(hostel);

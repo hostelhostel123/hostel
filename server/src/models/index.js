@@ -40,8 +40,12 @@ const hostelSchema = new Schema({
   beds: { type: Number, required: true, min: 0 },
   gender: { type: String, enum: ['MALE', 'FEMALE', 'ANY'], default: 'ANY' },
   amenities: [String],
+  floors: { type: Number, min: 1 }, totalRooms: { type: Number, min: 1 },
+  // How many rooms of each size (1–5 beds) and the monthly price of one bed in them.
+  seaterRooms: { type: [{ _id: false, seats: { type: Number, min: 1, max: 5, required: true }, rooms: { type: Number, min: 0, required: true }, pricePerBed: { type: Number, min: 0, required: true } }], default: undefined },
+  mealsPerDay: { type: Number, min: 0, max: 3 }, universities: { type: [String], default: undefined },
   rooms: { type: [roomSchema], default: undefined }, areas: { type: [areaSchema], default: undefined },
-  images: [{ _id: false, publicId: String, url: String }], coverImage: String,
+  images: [{ _id: false, publicId: String, url: String, seats: { type: Number, min: 1, max: 5 } }], coverImage: String,
   status: { type: String, enum: ['DRAFT', 'PENDING', 'APPROVED', 'REJECTED', 'SUSPENDED'], default: 'DRAFT' },
   featured: { type: Boolean, default: false },
   moderationReason: String, moderatedBy: { type: Schema.Types.ObjectId, ref: 'User' },

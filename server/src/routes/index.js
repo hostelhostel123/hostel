@@ -30,7 +30,31 @@ router.patch('/auth/me', authenticate, validate(z.object({ name: text(100), phon
 const planBox = { floor: z.number().int().min(0).max(50).default(0), x: z.number().min(0).max(1000), y: z.number().min(0).max(1000), w: z.number().min(1).max(1000), h: z.number().min(1).max(1000) };
 const room = z.object({ code: text(20), seats: z.number().int().min(1).max(20), available: z.number().int().min(0).max(20), price: z.number().min(0).max(10000000), ...planBox }).strict().refine(value => value.available <= value.seats, 'Available seats cannot exceed room capacity');
 const area = z.object({ label: text(60), kind: z.enum(['CORRIDOR', 'STAIRS', 'BATH', 'KITCHEN', 'COMMON', 'STUDY', 'OTHER']).default('OTHER'), ...planBox }).strict();
-const hostelSchema = z.object({ name: text(150), description: text(5000), city: text(100), address: text(300), price: z.number().min(0).max(10000000), beds: z.number().int().min(0).max(10000), gender: z.enum(['MALE', 'FEMALE', 'ANY']).default('ANY'), amenities: z.array(text(80)).max(30).default([]), rooms: z.array(room).max(300).optional(), areas: z.array(area).max(300).optional() }).strict();
+const seaterRoom = z.object({ seats: z.number().int().min(1).max(5), rooms: z.number().int().min(0).max(1000), pricePerBed: z.number().min(0).max(10000000) }).strict();
+const hostelSchema = z.object({
+  name: text(150), description: text(5000), city: text(100), address: text(300),
+  price: z.number().min(0).max(10000000).optional(), beds: z.number().int().min(0).max(10000).optional(),
+  floors: z.number().int().min(1).max(50).optional(), totalRooms: z.number().int().min(1).max(1000).optional(),
+  seaterRooms: z.array(seaterRoom).min(1).max(5).optional(),
+  gender: z.enum(['MALE', 'FEMALE', 'ANY']).default('ANY'), amenities: z.array(text(80)).max(30).default([]),
+  mealsPerDay: z.number().int().min(0).max(3).optional(), universities: z.array(text(120)).max(20).optional(),
+  rooms: z.array(room).max(300).optional(), areas: z.array(area).max(300).optional(),
+}).strict().superRefine((value, ctx) => {
+  if (!value.seaterRooms) {
+    if (value.price === undefined || value.beds === undefined) ctx.addIssue({ code: 'custom', message: 'Enter the rooms of each size and their bed prices' });
+    return;
+  }
+  const used = value.seaterRooms.filter(type => type.rooms > 0);
+  if (new Set(value.seaterRooms.map(type => type.seats)).size !== value.seaterRooms.length) ctx.addIssue({ code: 'custom', message: 'Each room size can only be listed once' });
+  if (!used.length) ctx.addIssue({ code: 'custom', message: 'Enter at least one room' });
+  if (!value.totalRooms) ctx.addIssue({ code: 'custom', message: 'Enter the total number of rooms' });
+  else if (used.reduce((sum, type) => sum + type.rooms, 0) > value.totalRooms) ctx.addIssue({ code: 'custom', message: 'The rooms of each size add up to more than the total number of rooms' });
+  if (used.some(type => !type.pricePerBed)) ctx.addIssue({ code: 'custom', message: 'Enter the price of a bed for every room size you have' });
+}).transform(value => {
+  if (!value.seaterRooms) return value;
+  const seaterRooms = value.seaterRooms.filter(type => type.rooms > 0).sort((a, b) => a.seats - b.seats);
+  return { ...value, seaterRooms, price: Math.min(...seaterRooms.map(type => type.pricePerBed)), beds: seaterRooms.reduce((sum, type) => sum + type.rooms * type.seats, 0) };
+});
 const owner = [authenticate, roles('OWNER')];
 const student = [authenticate, roles('STUDENT')];
 const adminOnly = [authenticate, roles('ADMIN', 'SUPERADMIN')];
@@ -51,8 +75,8 @@ router.delete('/hostels/:id', ...owner, validId, hostels.remove);
 router.post('/hostels/:id/submit', ...owner, validId, hostels.submit);
 router.post('/hostels/:id/favorite', ...student, validId, hostels.favorite);
 router.delete('/hostels/:id/favorite', ...student, validId, hostels.favorite);
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024, files: 10, fields: 0 } });
-router.post('/hostels/:id/images', ...owner, validId, upload.array('images', 10), images.upload);
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024, files: 10, fields: 1 } });
+router.post('/hostels/:id/images', ...owner, validId, upload.array('images', 10), validate(z.object({ seats: z.coerce.number().int().min(1).max(5).optional() }).strict()), images.upload);
 router.put('/hostels/:id/images', ...owner, validId, validate(z.object({ publicIds: z.array(text(200)).min(1).max(10), coverImage: text(200) }).strict()), images.arrange);
 router.delete('/hostels/:id/images', ...owner, validId, validate(z.object({ publicId: text(200) }).strict()), images.remove);
 router.get('/images/:imageId', validate(z.object({ imageId: z.uuid() }), 'params'), images.show);

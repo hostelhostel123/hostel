@@ -8,6 +8,13 @@ import { FloorPlan, FloorTabs, PlanLegend } from '../components/FloorPlan'
 import { availability, availabilityText, floorName, floorsOf, formatPrice, freeSeats, hasPlan, lowestPrice, roomTypes, seatLabel } from '../lib/rooms'
 
 const residents = { MALE: 'Male residents', FEMALE: 'Female residents', ANY: 'All residents' }
+const mealText = ['No meals', 'Meals once a day', 'Meals twice a day', 'Meals three times a day']
+const hasSeaters = hostel => Array.isArray(hostel?.seaterRooms) && hostel.seaterRooms.length > 0
+function SeaterRooms({ hostel }) {
+  return <section className="mt-14"><h2 className="text-lg font-semibold tracking-tight">Rooms and prices</h2><p className="mt-1 text-sm text-muted">{hostel.totalRooms} rooms{hostel.floors ? ` across ${hostel.floors} floor${hostel.floors > 1 ? 's' : ''}` : ''}. Prices are for one bed per month.</p>
+    <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{hostel.seaterRooms.map(type => { const photo = hostel.images.find(image => image.seats === type.seats); return <article key={type.seats} className="overflow-hidden rounded-2xl border border-line bg-surface">{photo ? <a href={photo.url} target="_blank" rel="noreferrer"><img src={photo.url} alt={`${seatLabel(type.seats)} room`} className="h-44 w-full object-cover" /></a> : <div className="grid h-44 place-items-center bg-raised text-sm text-faint">No photo</div>}<div className="p-4"><div className="flex items-baseline justify-between gap-3"><h3 className="font-semibold">{seatLabel(type.seats)} room</h3><p className="text-sm text-muted">{type.rooms} room{type.rooms > 1 ? 's' : ''}</p></div><p className="mt-2 text-lg font-semibold tabular-nums">{formatPrice(type.pricePerBed)}<span className="text-sm font-normal text-muted"> per bed</span></p></div></article> })}</div>
+  </section>
+}
 
 function Favorite({ hostel, onChange, compact = false }) {
   const { user, setUser } = useAuth()
@@ -26,6 +33,11 @@ function Favorite({ hostel, onChange, compact = false }) {
 }
 
 function RoomSummary({ hostel }) {
+  if (!hasPlan(hostel) && hasSeaters(hostel)) return <table className="w-full text-sm">
+    <caption className="sr-only">Rooms at {hostel.name}</caption>
+    <thead><tr className="text-left text-[11px] uppercase tracking-wider text-faint"><th scope="col" className="pb-2 font-medium">Room type</th><th scope="col" className="pb-2 font-medium">Rooms</th><th scope="col" className="pb-2 text-right font-medium">Per bed / month</th></tr></thead>
+    <tbody>{hostel.seaterRooms.map(type => <tr key={type.seats} className="border-t border-line"><td className="py-2.5"><span className="flex items-center gap-2 font-medium"><Users size={14} aria-hidden="true" className="text-faint" />{seatLabel(type.seats)}</span></td><td className="py-2.5 text-muted">{type.rooms}</td><td className="py-2.5 text-right font-medium tabular-nums">{formatPrice(type.pricePerBed)}</td></tr>)}</tbody>
+  </table>
   if (!hasPlan(hostel)) return <div className="rounded-xl bg-ground px-4 py-3 text-sm text-muted"><span className="font-medium text-ink">{hostel.beds} beds</span> available · room-by-room plan not published yet</div>
   return <table className="w-full text-sm">
     <caption className="sr-only">Rooms at {hostel.name}</caption>
@@ -45,9 +57,9 @@ export function HostelCard({ hostel, onChange }) {
     <div className="flex min-w-0 flex-col gap-5 p-5 md:p-6 md:pl-3">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0"><h2 className="text-xl font-semibold tracking-tight"><Link to={`/hostels/${hostel._id}`} className="hover:text-accent-ink">{hostel.name}</Link></h2><p className="mt-1.5 flex items-center gap-1.5 text-sm text-muted"><MapPin size={14} aria-hidden="true" />{hostel.address}, {hostel.city}</p></div>
-        <div className="text-right"><p className="text-[11px] uppercase tracking-wider text-faint">From</p><p className="text-xl font-semibold tabular-nums tracking-tight">{formatPrice(lowestPrice(hostel))}</p><p className="text-xs text-muted">per month</p></div>
+        <div className="text-right"><p className="text-[11px] uppercase tracking-wider text-faint">From</p><p className="text-xl font-semibold tabular-nums tracking-tight">{formatPrice(lowestPrice(hostel))}</p><p className="text-xs text-muted">{hasSeaters(hostel) ? 'per bed / month' : 'per month'}</p></div>
       </div>
-      <div className="flex flex-wrap gap-2">{hostel.featured && <span className="chip !bg-accent-soft !text-accent-ink"><Star size={13} aria-hidden="true" />Featured</span>}<span className="chip">{residents[hostel.gender] || residents.ANY}</span><span className={`chip ${seats ? '!bg-accent-soft !text-accent-ink' : ''}`}><BedDouble size={13} aria-hidden="true" />{seats ? `${seats} ${seats === 1 ? 'seat' : 'seats'} free` : 'Fully occupied'}</span>{hostel.amenities.slice(0, 4).map(item => <span key={item} className="chip">{item}</span>)}</div>
+      <div className="flex flex-wrap gap-2">{hostel.featured && <span className="chip !bg-accent-soft !text-accent-ink"><Star size={13} aria-hidden="true" />Featured</span>}<span className="chip">{residents[hostel.gender] || residents.ANY}</span>{hasSeaters(hostel) ? <span className="chip !bg-accent-soft !text-accent-ink"><BedDouble size={13} aria-hidden="true" />{hostel.seaterRooms.map(type => seatLabel(type.seats)).join(' · ')}</span> : <span className={`chip ${seats ? '!bg-accent-soft !text-accent-ink' : ''}`}><BedDouble size={13} aria-hidden="true" />{seats ? `${seats} ${seats === 1 ? 'seat' : 'seats'} free` : 'Fully occupied'}</span>}{hostel.mealsPerDay > 0 && <span className="chip">{mealText[hostel.mealsPerDay]}</span>}{hostel.amenities.slice(0, 4).map(item => <span key={item} className="chip">{item}</span>)}</div>
       <RoomSummary hostel={hostel} />
       <div className="mt-auto flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4"><Favorite hostel={hostel} onChange={onChange} /><Link to={`/hostels/${hostel._id}`} className="btn btn-primary">{hasPlan(hostel) ? 'View floor plan' : 'View details'}<ArrowRight size={16} aria-hidden="true" /></Link></div>
     </div>
@@ -173,12 +185,12 @@ export function HostelDetail() {
         {gallery.length ? gallery.slice(0, 5).map((image, index) => <a key={image.publicId} href={image.url} target="_blank" rel="noreferrer" className={`group overflow-hidden rounded-xl ${index === 0 ? 'sm:col-span-2 sm:row-span-2' : 'hidden sm:block'}`}><img src={image.url} alt={`${hostel.name} photo ${index + 1}`} className={`w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.03] motion-reduce:transition-none ${index === 0 ? 'h-72 sm:h-[420px]' : 'h-[204px]'}`} /></a>) : <Cover hostel={hostel} className="h-72 w-full sm:col-span-4" />}
       </div>
       <div className="mt-10 grid gap-10 lg:grid-cols-[1fr_360px]">
-        <section><h2 className="text-lg font-semibold tracking-tight">About this hostel</h2><p className="mt-3 whitespace-pre-wrap text-[15px] leading-8 text-muted">{hostel.description}</p>{hostel.amenities.length > 0 && <><h2 className="mt-8 text-lg font-semibold tracking-tight">Amenities</h2><ul className="mt-4 flex flex-wrap gap-2">{hostel.amenities.map(item => <li key={item} className="chip border border-line !bg-surface !px-3.5 !py-2 !text-[13px]">{item}</li>)}</ul></>}</section>
+        <section><h2 className="text-lg font-semibold tracking-tight">About this hostel</h2><p className="mt-3 whitespace-pre-wrap text-[15px] leading-8 text-muted">{hostel.description}</p>{hostel.amenities.length > 0 && <><h2 className="mt-8 text-lg font-semibold tracking-tight">Amenities</h2><ul className="mt-4 flex flex-wrap gap-2">{hostel.amenities.map(item => <li key={item} className="chip border border-line !bg-surface !px-3.5 !py-2 !text-[13px]">{item}</li>)}</ul></>}{hostel.universities?.length > 0 && <><h2 className="mt-8 text-lg font-semibold tracking-tight">Nearby universities</h2><ul className="mt-4 flex flex-wrap gap-2">{hostel.universities.map(item => <li key={item} className="chip border border-line !bg-surface !px-3.5 !py-2 !text-[13px]">{item}</li>)}</ul></>}</section>
         <aside className="panel h-fit lg:sticky lg:top-24">
           <p className="text-[11px] uppercase tracking-wider text-faint">From</p>
-          <p className="mt-1 text-3xl font-semibold tabular-nums tracking-tight">{formatPrice(lowestPrice(hostel))}<span className="text-sm font-normal text-muted"> / month</span></p>
+          <p className="mt-1 text-3xl font-semibold tabular-nums tracking-tight">{formatPrice(lowestPrice(hostel))}<span className="text-sm font-normal text-muted">{hasSeaters(hostel) ? ' per bed / month' : ' / month'}</span></p>
           <dl className="mt-6 grid gap-3 border-t border-line pt-5 text-sm">
-            <div className="flex justify-between gap-4"><dt className="text-muted">Free seats</dt><dd className="font-medium">{freeSeats(hostel)}</dd></div>
+            {hasSeaters(hostel) ? <><div className="flex justify-between gap-4"><dt className="text-muted">Rooms</dt><dd className="text-right font-medium">{hostel.seaterRooms.map(type => seatLabel(type.seats)).join(', ')}</dd></div>{hostel.floors && <div className="flex justify-between gap-4"><dt className="text-muted">Floors</dt><dd className="font-medium">{hostel.floors}</dd></div>}{hostel.mealsPerDay !== undefined && <div className="flex justify-between gap-4"><dt className="text-muted">Meals</dt><dd className="font-medium">{mealText[hostel.mealsPerDay]}</dd></div>}</> : <div className="flex justify-between gap-4"><dt className="text-muted">Free seats</dt><dd className="font-medium">{freeSeats(hostel)}</dd></div>}
             {hasPlan(hostel) && <div className="flex justify-between gap-4"><dt className="text-muted">Room types</dt><dd className="text-right font-medium">{roomTypes(hostel).map(group => group.seats).join(', ')} seats per room</dd></div>}
             <div className="flex justify-between gap-4"><dt className="text-muted">Residents</dt><dd className="font-medium">{residents[hostel.gender] || residents.ANY}</dd></div>
             <div className="flex justify-between gap-4"><dt className="text-muted">Managed by</dt><dd className="font-medium">{hostel.owner?.name || 'Hostel owner'}</dd></div>
@@ -190,7 +202,8 @@ export function HostelDetail() {
           <ErrorNotice>{actionError}</ErrorNotice>
         </aside>
       </div>
-      {hasPlan(hostel) ? <RoomPicker hostel={hostel} /> : <section className="mt-14 rounded-2xl border border-dashed border-line-strong p-8 text-center"><p className="text-lg font-semibold tracking-tight">Floor plan coming soon</p><p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted">This owner hasn't published a room-by-room plan yet. {hostel.beds} beds are listed at {formatPrice(hostel.price)} a month. Message the owner to ask about specific rooms.</p></section>}
+      {hasSeaters(hostel) && <SeaterRooms hostel={hostel} />}
+      {hasPlan(hostel) ? <RoomPicker hostel={hostel} /> : !hasSeaters(hostel) && <section className="mt-14 rounded-2xl border border-dashed border-line-strong p-8 text-center"><p className="text-lg font-semibold tracking-tight">Floor plan coming soon</p><p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted">This owner hasn't published a room-by-room plan yet. {hostel.beds} beds are listed at {formatPrice(hostel.price)} a month. Message the owner to ask about specific rooms.</p></section>}
     </>}
   </main>
 }
