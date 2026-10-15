@@ -1,6 +1,7 @@
 import { Hostel, User, Conversation, Message } from '../models/index.js';
 import { HttpError } from '../middleware/http.js';
 import { ownedHostel, requireEditable, resetReview } from '../services/hostels.js';
+import { phoneVerificationRequired } from '../services/auth.js';
 
 const escapeRegex = value => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 export async function list(req, res) {
@@ -45,6 +46,7 @@ export async function update(req, res) {
   res.json({ data: hostel });
 }
 export async function submit(req, res) {
+  if (phoneVerificationRequired(req.user)) throw new HttpError(403, 'Verify your mobile number before submitting a listing');
   const hostel = await ownedHostel(req.params.id, req.user);
   requireEditable(hostel);
   if (!['DRAFT', 'REJECTED'].includes(hostel.status)) throw new HttpError(409, 'Listing is already submitted');

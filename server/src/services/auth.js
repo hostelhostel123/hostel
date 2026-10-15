@@ -3,8 +3,10 @@ import jwt from 'jsonwebtoken';
 import { env, cookieOptions } from '../config/env.js';
 import { Session, User } from '../models/index.js';
 import { HttpError } from '../middleware/http.js';
+import { smsEnabled } from './sms.js';
 
-export const publicUser = user => ({ id: user.id, name: user.name, firstName: user.firstName, lastName: user.lastName, phone: user.phone, username: user.username, email: user.email, role: user.role, active: user.active, ...(user.role === 'STUDENT' && { favoriteIds: user.favorites.map(String) }) });
+export const phoneVerificationRequired = user => user.role === 'OWNER' && smsEnabled() && !user.phoneVerified;
+export const publicUser = user => ({ id: user.id, name: user.name, firstName: user.firstName, lastName: user.lastName, phone: user.phone, phoneVerified: Boolean(user.phoneVerified), phoneVerificationRequired: phoneVerificationRequired(user), username: user.username, email: user.email, role: user.role, active: user.active, ...(user.role === 'STUDENT' && { favoriteIds: user.favorites.map(String) }) });
 export async function createSession(user, res) {
   const sessionId = randomUUID();
   await Session.create({ _id: sessionId, user: user._id, expiresAt: new Date(Date.now() + 86400000) });

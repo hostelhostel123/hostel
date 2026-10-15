@@ -7,6 +7,8 @@ const userSchema = new Schema({
   firstName: { type: String, trim: true },
   lastName: { type: String, trim: true },
   phone: { type: String, trim: true },
+  phoneVerified: { type: Boolean, default: false },
+  pendingPhone: { type: String, select: false }, phoneCodeSentAt: { type: Date, select: false },
   username: { type: String, lowercase: true, trim: true, match: /^[a-z0-9_]{3,24}$/ },
   email: { type: String, required: true, unique: true, lowercase: true, trim: true },
   password: { type: String, required: true, select: false },

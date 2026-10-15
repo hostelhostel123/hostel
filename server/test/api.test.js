@@ -247,3 +247,36 @@ test('super admins manage staff, create and remove users, and feature listings',
   assert.equal((await request(app).get(`/api/hostels/${hostel._id}`)).status, 404);
   assert.equal((await owner.agent.get('/api/owner/hostels')).status, 401);
 });
+
+test('owners verify their mobile number by SMS code before submitting listings', async () => {
+  const { setSmsProvider } = await import('../src/services/sms.js');
+  const owner = await account('OWNER', 'phoneowner');
+  const student = await account('STUDENT', 'phonestudent');
+  const hostelId = (await write(owner.agent, 'post', '/hostels', body)).body.data._id;
+  assert.equal((await write(owner.agent, 'post', '/auth/phone/send', { phone: '03001234567' })).status, 503);
+  assert.equal((await owner.agent.get('/api/auth/me')).body.data.phoneVerificationRequired, false);
+
+  const sent = [];
+  setSmsProvider({ send: async phone => { sent.push(phone); }, check: async (phone, code) => phone === sent.at(-1) && code === '246810' });
+  try {
+    assert.equal((await owner.agent.get('/api/auth/me')).body.data.phoneVerificationRequired, true);
+    assert.equal((await write(owner.agent, 'post', `/hostels/${hostelId}/submit`)).status, 403);
+    assert.equal((await write(student.agent, 'post', '/auth/phone/send', { phone: '03001234567' })).status, 403);
+    assert.equal((await write(owner.agent, 'post', '/auth/phone/send', { phone: '12345' })).status, 400);
+    assert.equal((await write(owner.agent, 'post', '/auth/phone/verify', { code: '246810' })).status, 409);
+    const result = await write(owner.agent, 'post', '/auth/phone/send', { phone: '0300 123-4567' });
+    assert.equal(result.status, 200, JSON.stringify(result.body));
+    assert.deepEqual(sent, ['+923001234567']);
+    assert.equal((await write(owner.agent, 'post', '/auth/phone/send', { phone: '03001234567' })).status, 429);
+    assert.equal((await write(owner.agent, 'post', '/auth/phone/verify', { code: '111111' })).status, 400);
+    const verified = await write(owner.agent, 'post', '/auth/phone/verify', { code: '246810' });
+    assert.equal(verified.status, 200, JSON.stringify(verified.body));
+    assert.equal(verified.body.data.phone, '+923001234567');
+    assert.equal(verified.body.data.phoneVerified, true);
+    assert.equal(verified.body.data.phoneVerificationRequired, false);
+    assert.notEqual((await write(owner.agent, 'post', `/hostels/${hostelId}/submit`)).status, 403);
+    const changed = await write(owner.agent, 'patch', '/auth/me', { name: 'Phone Owner', phone: '+923111111111' });
+    assert.equal(changed.body.data.phoneVerified, false);
+    assert.equal(changed.body.data.phoneVerificationRequired, true);
+  } finally { setSmsProvider(null); }
+});

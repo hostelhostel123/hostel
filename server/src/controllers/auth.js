@@ -3,6 +3,7 @@ import { User, Session } from '../models/index.js';
 import { createSession, publicUser } from '../services/auth.js';
 import { cookieOptions } from '../config/env.js';
 import { HttpError } from '../middleware/http.js';
+import { checkCode, normalizePhone, sendCode } from '../services/sms.js';
 
 export async function register(req, res) {
   const { password, firstName: suppliedFirst, lastName: suppliedLast, phone, username: suppliedUsername, email, role } = req.validated.body;
@@ -36,7 +37,30 @@ export async function profile(req, res) {
   const [firstName, ...lastName] = req.user.name.split(/\s+/);
   req.user.firstName = firstName;
   req.user.lastName = lastName.join(' ');
-  if (req.validated.body.phone !== undefined) req.user.phone = req.validated.body.phone;
+  if (req.validated.body.phone !== undefined && req.validated.body.phone !== req.user.phone) {
+    req.user.phone = req.validated.body.phone;
+    req.user.phoneVerified = false;
+  }
   await req.user.save();
   res.json({ data: publicUser(req.user) });
+}
+const resendAfter = 60000;
+export async function sendPhoneCode(req, res) {
+  const phone = normalizePhone(req.validated.body.phone);
+  const user = await User.findById(req.user._id).select('+phoneCodeSentAt');
+  const wait = user.phoneCodeSentAt && resendAfter - (Date.now() - user.phoneCodeSentAt.getTime());
+  if (wait > 0) throw new HttpError(429, `Please wait ${Math.ceil(wait / 1000)} seconds before requesting another code`);
+  await sendCode(phone);
+  await User.updateOne({ _id: user._id }, { $set: { pendingPhone: phone, phoneCodeSentAt: new Date() } });
+  res.json({ data: { phone, resendAfterSeconds: resendAfter / 1000 } });
+}
+export async function verifyPhoneCode(req, res) {
+  const user = await User.findById(req.user._id).select('+pendingPhone');
+  if (!user.pendingPhone) throw new HttpError(409, 'Request a new code first');
+  if (!await checkCode(user.pendingPhone, req.validated.body.code)) throw new HttpError(400, 'That code is incorrect or has expired');
+  user.phone = user.pendingPhone;
+  user.phoneVerified = true;
+  user.pendingPhone = undefined;
+  await user.save();
+  res.json({ data: publicUser(user) });
 }
