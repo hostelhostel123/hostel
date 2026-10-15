@@ -19,7 +19,7 @@ export function Account({ role = 'STUDENT' }) {
     if (owner && auth.user.role !== 'OWNER' && !staff) return <Page title="An owner account is required"><SignOut /></Page>
     if (!owner && staff) return <Page title="Administration has moved" description="Admin accounts sign in on the owner portal.">{import.meta.env.VITE_OWNER_PORTAL_URL && <p className="mb-4"><a href={`${import.meta.env.VITE_OWNER_PORTAL_URL.replace(/\/$/, '')}/login`} className="action-link">Open the owner portal</a></p>}<SignOut /></Page>
     const from = location.state?.from
-    const destination = typeof from === 'string' && from.startsWith('/') && !from.startsWith('//') && !['/login', '/register'].includes(from.split('?')[0]) ? from : staff ? '/admin' : owner ? '/dashboard' : '/hostels'
+    const destination = typeof from === 'string' && from.startsWith('/') && !from.startsWith('//') && !['/login', '/register'].includes(from.split('?')[0]) ? from : staff ? '/admin' : owner ? (auth.user.phoneVerificationRequired ? '/verify-phone' : '/dashboard') : '/hostels'
     return <Navigate to={destination} replace />
   }
   async function submit(event) {
