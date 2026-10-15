@@ -23,9 +23,21 @@ export function roomTypes(hostel) {
     group.rooms += 1
     group.free += room.available
     group.minPrice = Math.min(group.minPrice, room.price)
+    group.maxPrice = Math.max(group.maxPrice ?? 0, room.priceMax ?? room.price)
     groups.set(room.seats, group)
   }
   return [...groups.values()].sort((a, b) => a.seats - b.seats)
 }
 export function freeSeats(hostel) { return hasPlan(hostel) ? hostel.rooms.reduce((sum, room) => sum + room.available, 0) : hostel.beds }
 export function lowestPrice(hostel) { return hasPlan(hostel) ? Math.min(...hostel.rooms.map(room => room.price)) : hostel.price }
+export function highestPrice(hostel) {
+  if (hostel.maxPrice) return hostel.maxPrice
+  if (hasPlan(hostel)) return Math.max(...hostel.rooms.map(room => room.priceMax ?? room.price))
+  if (hostel.seaterRooms?.length) return Math.max(...hostel.seaterRooms.map(type => type.pricePerBed))
+  return hostel.price
+}
+// "PKR 15,000 – 33,000" when prices vary, otherwise a single price.
+export const formatRange = (low, high) => high > low ? `${formatPrice(low)} – ${Number(high).toLocaleString()}` : formatPrice(low)
+export const priceRange = hostel => formatRange(lowestPrice(hostel), highestPrice(hostel))
+export const roomPriceRange = room => formatRange(room.price, room.priceMax ?? room.price)
+export const bathLabel = bath => ({ ATTACHED: 'Attached bathroom', SHARED: 'Shared bathroom' })[bath]

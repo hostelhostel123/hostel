@@ -159,10 +159,11 @@ VITE_SOCKET_URL=https://YOUR-API-HOST
 
 `VITE_API_URL` must use public HTTPS and end in `/api`. `VITE_SOCKET_URL` is optional because it can be derived from the API URL, but setting it explicitly makes the production configuration clear. It must be the origin only, with no `/api` path.
 
-On the admin (`main`) project also add:
+On both projects also add the two portal addresses. They link the portals to each other and send an account that signs in on the wrong one (a student on the owner portal, an owner or admin on the student site) to the right one, already signed in:
 
 ```env
 VITE_OWNER_PORTAL_URL=https://YOUR-OWNER-PORTAL
+VITE_STUDENT_SITE_URL=https://YOUR-STUDENT-SITE
 ```
 
 Then redeploy both projects. Vite embeds these values at build time, so changing a variable without rebuilding does not update the deployed application.

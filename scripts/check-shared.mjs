@@ -15,7 +15,7 @@ async function files(directory, prefix = '') {
   return result
 }
 const paths = new Set([...(await files(join(owner, 'server'))).map(path => `server/${path}`), ...(await files(join(main, 'server'))).map(path => `server/${path}`),
-  'client/src/services/api.js', 'client/src/services/config.js', 'client/src/context/AuthContext.jsx', 'client/src/components/ui.jsx', 'client/src/pages/Account.jsx', 'client/src/pages/Messages.jsx', 'client/test/config.test.js', 'client/vite.config.js', 'client/vercel.json', 'client/.env.example',
+  'client/src/services/api.js', 'client/src/services/config.js', 'client/src/context/AuthContext.jsx', 'client/src/components/ui.jsx', 'client/src/components/FloorPlan.jsx', 'client/src/components/theme.jsx', 'client/src/lib/rooms.js', 'client/src/pages/Account.jsx', 'client/src/pages/Messages.jsx', 'client/test/config.test.js', 'client/vite.config.js', 'client/vercel.json', 'client/.env.example',
 ])
 let failures = 0
 for (const path of paths) {

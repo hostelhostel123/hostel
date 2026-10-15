@@ -1,7 +1,7 @@
 import { Suspense, lazy, useEffect, useState } from 'react'
 import { Link, NavLink, Route, Routes, useLocation } from 'react-router-dom'
 import { ArrowRight, ArrowUpRight, Building2, Menu, Search, X } from 'lucide-react'
-import { AuthProvider, RequireRole, SignOut, useAuth } from './context/AuthContext'
+import { AuthProvider, RequireRole, SignOut, portals, useAuth } from './context/AuthContext'
 import { Account, Profile } from './pages/Account'
 import { HostelDetail, Hostels } from './pages/Student'
 import Messages from './pages/Messages'
@@ -9,7 +9,7 @@ import { Page } from './components/ui'
 import { ThemeToggle } from './components/theme'
 
 const HeroScene = lazy(() => import('./components/HeroScene'))
-const ownerPortal = (import.meta.env.VITE_OWNER_PORTAL_URL || 'https://hostel-site-user.vercel.app').replace(/\/$/, '')
+const ownerPortal = portals.owner.url
 const ownerSignUp = `${ownerPortal}/register`
 
 function Mark() {
@@ -62,7 +62,7 @@ function Landing() {
     <section className="mx-auto grid max-w-[1240px] gap-12 px-5 pb-16 pt-12 lg:grid-cols-[1.05fr_1fr] lg:items-center lg:px-8 lg:pb-24 lg:pt-16">
       <div className="rise">
         <p className="eyebrow">Student housing, room by room</p>
-        <h1 className="display mt-5 text-[52px] leading-[.98] sm:text-[68px] lg:text-[78px]">Find your room.<br /><em className="text-accent-ink">Or fill yours.</em></h1>
+        <h1 className="display mt-5 text-[44px] leading-[1.02] sm:text-[56px] lg:text-[64px]">Find your room.<br /><span className="text-accent-ink">Or fill yours.</span></h1>
         <p className="mt-6 max-w-[500px] text-[17px] leading-8 text-muted">HostelHub shows students every approved hostel down to the room, and gives owners a simple way to list theirs. Which brings you here?</p>
         <div className="mt-9 grid gap-4 sm:grid-cols-2">
           <Choice primary to="/hostels" icon={Search} title="I'm looking for a place" text="Browse approved hostels and choose a room on the floor plan." cta="View listings" />

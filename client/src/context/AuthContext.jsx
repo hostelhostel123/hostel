@@ -40,12 +40,32 @@ export function SignOut() {
   const [busy, setBusy] = useState(false)
   return <div><Button secondary disabled={busy} onClick={async () => { setBusy(true); setError(''); try { await logout() } catch (cause) { setError(cause.message) } finally { setBusy(false) } }}>Sign out</Button><ErrorNotice>{error}</ErrorNotice></div>
 }
+const staffRoles = ['ADMIN', 'SUPERADMIN']
+const trim = url => url?.replace(/\/$/, '')
+// Students use the student site; owners and staff use the owner portal. Both share one API session,
+// so an account that signs in on the wrong portal is handed to the right one already signed in.
+export const portals = {
+  student: { name: 'the student site', url: trim(import.meta.env.VITE_STUDENT_SITE_URL) },
+  owner: { name: 'the owner portal', url: trim(import.meta.env.VITE_OWNER_PORTAL_URL || 'https://hostel-site-user.vercel.app') },
+}
+export const portalOf = role => role === 'STUDENT' ? 'student' : 'owner'
+const homePath = role => role === 'STUDENT' ? '/hostels' : staffRoles.includes(role) ? '/admin' : '/dashboard'
+const roleNames = { STUDENT: 'a student', OWNER: 'an owner', ADMIN: 'an administrator', SUPERADMIN: 'a super administrator' }
+export function PortalHandoff({ user }) {
+  const portal = portals[portalOf(user.role)]
+  const target = portal.url && `${portal.url}${homePath(user.role)}`
+  useEffect(() => { if (target) window.location.replace(target) }, [target])
+  return <Page eyebrow="Different portal" title={target ? `Taking you to ${portal.name}…` : `This account uses ${portal.name}`} description={`You're signed in as ${roleNames[user.role] || 'a user'}. ${user.role === 'STUDENT' ? 'Student accounts find and request rooms on the student site.' : 'Owner and admin accounts manage listings on the owner portal.'}`}>
+    <div className="flex flex-wrap items-start gap-3">{target && <a href={target} className="action-link">Open {portal.name}</a>}<SignOut /></div>
+  </Page>
+}
 export function RequireRole({ roles, children }) {
   const { user, loading, error, retry } = useAuth()
   const location = useLocation()
   if (loading) return <Loading />
   if (error) return <Page title="Unable to load your account"><ErrorNotice retry={retry}>{error}</ErrorNotice></Page>
   if (!user) return <Navigate to="/login" state={{ from: location.pathname + location.search }} replace />
+  if (!roles.includes(user.role) && !roles.some(role => portalOf(role) === portalOf(user.role))) return <PortalHandoff user={user} />
   if (!roles.includes(user.role)) return <Page title="Access restricted" description="This account cannot access this portal. Sign in with the appropriate account."><SignOut /></Page>
   return children
 }

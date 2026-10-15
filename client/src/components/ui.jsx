@@ -31,12 +31,12 @@ export function Button({ secondary = false, className = '', ...props }) { return
 export function Field({ label, children }) { return <label className="field"><span>{label}</span>{children}</label> }
 export function Pagination({ pagination, onChange }) {
   if (!pagination || pagination.total <= pagination.limit) return null
-  return <nav aria-label="Pagination" className="mt-10 flex items-center justify-center gap-4"><Button secondary disabled={pagination.page <= 1} onClick={() => onChange(pagination.page - 1)}>Previous</Button><span className="font-mono text-xs text-muted">Page {pagination.page} of {Math.ceil(pagination.total / pagination.limit)}</span><Button secondary disabled={pagination.page * pagination.limit >= pagination.total} onClick={() => onChange(pagination.page + 1)}>Next</Button></nav>
+  return <nav aria-label="Pagination" className="mt-10 flex items-center justify-center gap-4"><Button secondary disabled={pagination.page <= 1} onClick={() => onChange(pagination.page - 1)}>Previous</Button><span className="tabular-nums text-xs text-muted">Page {pagination.page} of {Math.ceil(pagination.total / pagination.limit)}</span><Button secondary disabled={pagination.page * pagination.limit >= pagination.total} onClick={() => onChange(pagination.page + 1)}>Next</Button></nav>
 }
 const tones = { APPROVED: ['open', 'text-open'], PENDING: ['limited', 'text-limited'], REJECTED: ['danger', 'text-danger'], SUSPENDED: ['danger', 'text-danger'] }
 export function Status({ value }) {
   const [token, text] = tones[value] || []
-  return <span style={token ? { background: mix(token, 14) } : undefined} className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 font-mono text-[11px] font-medium tracking-wide ${token ? text : 'bg-raised text-ink-soft'}`}><span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-current" />{value}</span>
+  return <span style={token ? { background: mix(token, 14) } : undefined} className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 tabular-nums text-[11px] font-medium tracking-wide ${token ? text : 'bg-raised text-ink-soft'}`}><span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-current" />{value}</span>
 }
 export function Deferred({ title }) { return <Page title={title} eyebrow="Coming later"><Empty>This feature is not available yet.</Empty></Page> }
 export function StatTile({ label, value, hint }) { return <div className="panel"><p className="text-sm text-muted">{label}</p><p className="stat mt-5">{value}</p>{hint && <p className="mt-2 text-xs text-faint">{hint}</p>}</div> }

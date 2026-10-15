@@ -5,7 +5,7 @@ import { api } from '../services/api'
 import { useAuth } from '../context/AuthContext'
 import { Button, Cover, Empty, ErrorNotice, Field, Loading, Page, Pagination, useResource } from '../components/ui'
 import { FloorPlan, FloorTabs, PlanLegend } from '../components/FloorPlan'
-import { availability, availabilityText, floorName, floorsOf, formatPrice, freeSeats, hasPlan, lowestPrice, roomTypes, seatLabel } from '../lib/rooms'
+import { availability, availabilityText, bathLabel, floorName, floorsOf, formatPrice, formatRange, freeSeats, hasPlan, highestPrice, lowestPrice, priceRange, roomPriceRange, roomTypes, seatLabel } from '../lib/rooms'
 
 const residents = { MALE: 'Male residents', FEMALE: 'Female residents', ANY: 'All residents' }
 const mealText = ['No meals', 'Meals once a day', 'Meals twice a day', 'Meals three times a day']
@@ -60,7 +60,7 @@ function RoomSummary({ hostel }) {
     <tbody>{roomTypes(hostel).map(group => <tr key={group.seats} className="border-t border-line">
       <td className="py-2.5"><span className="flex items-center gap-2 font-medium"><Users size={14} aria-hidden="true" className="text-faint" />{seatLabel(group.seats)}<span className="font-normal text-faint">· {group.rooms} {group.rooms === 1 ? 'room' : 'rooms'}</span></span></td>
       <td className="py-2.5">{group.free ? <span className="font-medium text-open">{group.free} free</span> : <span className="text-faint">Full</span>}</td>
-      <td className="py-2.5 text-right font-medium tabular-nums">{formatPrice(group.minPrice)}</td>
+      <td className="py-2.5 text-right font-medium tabular-nums">{formatRange(group.minPrice, group.maxPrice)}</td>
     </tr>)}</tbody>
   </table>
 }
@@ -72,7 +72,7 @@ export function HostelCard({ hostel, onChange }) {
     <div className="flex min-w-0 flex-col gap-5 p-5 md:p-6 md:pl-3">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0"><h2 className="text-xl font-semibold tracking-tight"><Link to={`/hostels/${hostel._id}`} className="hover:text-accent-ink">{hostel.name}</Link></h2><p className="mt-1.5 flex items-center gap-1.5 text-sm text-muted"><MapPin size={14} aria-hidden="true" />{hostel.address}, {hostel.city}</p></div>
-        <div className="text-right"><p className="text-[11px] uppercase tracking-wider text-faint">From</p><p className="text-xl font-semibold tabular-nums tracking-tight">{formatPrice(lowestPrice(hostel))}</p><p className="text-xs text-muted">{hasSeaters(hostel) ? 'per bed / month' : 'per month'}</p></div>
+        <div className="text-right"><p className="text-[11px] uppercase tracking-wider text-faint">{highestPrice(hostel) > lowestPrice(hostel) ? 'Price range' : 'From'}</p><p className="text-xl font-semibold tabular-nums tracking-tight">{priceRange(hostel)}</p><p className="text-xs text-muted">{hasSeaters(hostel) ? 'per bed / month' : 'per month'}</p></div>
       </div>
       <div className="flex flex-wrap gap-2">{hostel.featured && <span className="chip !bg-accent-soft !text-accent-ink"><Star size={13} aria-hidden="true" />Featured</span>}<span className="chip">{residents[hostel.gender] || residents.ANY}</span>{hasSeaters(hostel) ? <span className="chip !bg-accent-soft !text-accent-ink"><BedDouble size={13} aria-hidden="true" />{hostel.seaterRooms.map(type => seatLabel(type.seats)).join(' · ')}</span> : <span className={`chip ${seats ? '!bg-accent-soft !text-accent-ink' : ''}`}><BedDouble size={13} aria-hidden="true" />{seats ? `${seats} ${seats === 1 ? 'seat' : 'seats'} free` : 'Fully occupied'}</span>}{hostel.mealsPerDay > 0 && <span className="chip">{mealText[hostel.mealsPerDay]}</span>}{hostel.amenities.slice(0, 4).map(item => <span key={item} className="chip">{item}</span>)}</div>
       <RoomSummary hostel={hostel} />
@@ -114,14 +114,15 @@ export function Hostels({ favorites = false }) {
 
 function RoomPanel({ hostel, room, onRequest, busy, error }) {
   const { user } = useAuth()
-  if (!room) return <div className="flex h-full flex-col justify-center gap-3 p-6 text-plan-text"><p className="font-mono text-[11px] uppercase tracking-[.18em] text-plan-muted">No room selected</p><p className="text-lg font-medium leading-snug">Select a room on the plan to see its seats and price.</p><p className="text-sm leading-6 text-plan-muted">Green rooms have free seats. Amber rooms have one seat left.</p></div>
+  if (!room) return <div className="flex h-full flex-col justify-center gap-3 p-6 text-plan-text"><p className="tabular-nums text-[11px] uppercase tracking-[.18em] text-plan-muted">No room selected</p><p className="text-lg font-medium leading-snug">Select a room on the plan to see its seats and price.</p><p className="text-sm leading-6 text-plan-muted">Green rooms have free seats. Amber rooms have one seat left.</p></div>
   const state = availability(room)
   const canRequest = room.available > 0 && (!user || user.role === 'STUDENT')
   return <div key={room.code} className="fade flex h-full flex-col gap-6 p-6 text-plan-text">
-    <div><p className="font-mono text-[11px] uppercase tracking-[.18em] text-plan-muted">{floorName(room.floor || 0)} · {availabilityText[state]}</p><h3 className="mt-2 font-mono text-4xl font-semibold tracking-tight">Room {room.code}</h3></div>
+    <div><p className="tabular-nums text-[11px] uppercase tracking-[.18em] text-plan-muted">{floorName(room.floor || 0)} · {availabilityText[state]}</p><h3 className="mt-2 tabular-nums text-4xl font-semibold tracking-tight">Room {room.code}</h3></div>
     <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-plan-edge bg-plan-edge">
-      {[['Room type', seatLabel(room.seats)], ['Capacity', `${room.seats} ${room.seats === 1 ? 'seat' : 'seats'}`], ['Free seats', room.available ? `${room.available} of ${room.seats}` : 'None'], ['Per seat / month', formatPrice(room.price)]].map(([label, value]) => <div key={label} className="bg-plan p-3.5"><dt className="text-[11px] text-plan-muted">{label}</dt><dd className="mt-1 font-mono text-[15px] font-medium">{value}</dd></div>)}
+      {[['Room type', seatLabel(room.seats)], ['Capacity', `${room.seats} ${room.seats === 1 ? 'seat' : 'seats'}`], ['Free seats', room.available ? `${room.available} of ${room.seats}` : 'None'], ['Per seat / month', roomPriceRange(room)], ...(room.bath ? [['Bathroom', room.bath === 'ATTACHED' ? 'Attached' : 'Shared']] : [])].map(([label, value], index, all) => <div key={label} className={`bg-plan p-3.5 ${all.length % 2 && index === all.length - 1 ? 'col-span-2' : ''}`}><dt className="text-[11px] text-plan-muted">{label}</dt><dd className="mt-1 tabular-nums text-[15px] font-medium">{value}</dd></div>)}
     </dl>
+    {room.seatPrices?.length > 1 && <div><p className="text-[11px] text-plan-muted">Price of each seat</p><ul className="mt-2 flex flex-wrap gap-2">{room.seatPrices.map((price, index) => <li key={index} className="rounded-lg border border-plan-edge px-3 py-1.5 text-sm tabular-nums">Seat {index + 1} · {formatPrice(price)}</li>)}</ul></div>}
     <div className="mt-auto grid gap-3">
       <button type="button" disabled={!canRequest || busy} onClick={onRequest} className="btn btn-accent min-h-12">{busy ? 'Sending request…' : room.available ? `Request room ${room.code}` : 'Room is full'}</button>
       <p className="text-xs leading-5 text-plan-muted">{user && user.role !== 'STUDENT' ? 'Room requests are available to student accounts.' : `This sends ${hostel.owner?.name || 'the owner'} a message about this room. Nothing is charged.`}</p>
@@ -147,7 +148,7 @@ function RoomPicker({ hostel }) {
     setBusy(true); setError('')
     try {
       const chat = await api('/conversations', { method: 'POST', body: { hostelId: hostel._id } })
-      await api(`/conversations/${chat.data._id}/messages`, { method: 'POST', body: { text: `Hi, I'd like to request Room ${room.code} (${seatLabel(room.seats)}, ${floorName(room.floor || 0)}) at ${formatPrice(room.price)} per seat per month. Is a seat still available?` } })
+      await api(`/conversations/${chat.data._id}/messages`, { method: 'POST', body: { text: `Hi, I'd like to request Room ${room.code} (${seatLabel(room.seats)}, ${floorName(room.floor || 0)}) at ${roomPriceRange(room)} per seat per month${room.bath ? `, ${bathLabel(room.bath).toLowerCase()}` : ''}. Is a seat still available?` } })
       navigate(`/messages?conversation=${chat.data._id}`)
     } catch (cause) { setError(cause.message); setBusy(false) }
   }
@@ -157,7 +158,7 @@ function RoomPicker({ hostel }) {
       <div className="min-w-0 border-plan-edge lg:border-r">
         <div className="flex flex-wrap items-center justify-between gap-4 border-b border-plan-edge px-5 py-4"><FloorTabs floors={floors} floor={floor} onChange={changeFloor} /><PlanLegend /></div>
         <div className="overflow-x-auto p-2 sm:p-4">
-          <p className="mb-1 px-3 pt-2 font-mono text-[11px] uppercase tracking-wider text-plan-muted sm:hidden">Swipe to see the whole floor</p><div key={floor} className="fade relative min-w-[680px]">
+          <p className="mb-1 px-3 pt-2 tabular-nums text-[11px] uppercase tracking-wider text-plan-muted sm:hidden">Swipe to see the whole floor</p><div key={floor} className="fade relative min-w-[680px]">
             <FloorPlan rooms={hostel.rooms.filter(onFloor)} areas={(hostel.areas || []).filter(onFloor)} selected={selected} onSelect={choose} />
           </div>
         </div>
@@ -166,8 +167,8 @@ function RoomPicker({ hostel }) {
     </div>
     <details className="group mt-5 rounded-2xl border border-line bg-surface">
       <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between px-5 text-sm font-medium">All rooms as a list<ArrowRight size={16} aria-hidden="true" className="transition-transform group-open:rotate-90" /></summary>
-      <div className="overflow-x-auto px-5 pb-4"><table className="w-full min-w-[520px] text-sm"><thead><tr className="text-left text-[11px] uppercase tracking-wider text-faint"><th scope="col" className="py-2 font-medium">Room</th><th scope="col" className="py-2 font-medium">Floor</th><th scope="col" className="py-2 font-medium">Type</th><th scope="col" className="py-2 font-medium">Free seats</th><th scope="col" className="py-2 text-right font-medium">Per seat / month</th><th scope="col"><span className="sr-only">Action</span></th></tr></thead>
-        <tbody>{hostel.rooms.map(item => <tr key={item.code} className="border-t border-line"><td className="py-2.5 font-mono font-medium">{item.code}</td><td>{floorName(item.floor || 0)}</td><td>{seatLabel(item.seats)}</td><td className={item.available ? 'text-open' : 'text-faint'}>{item.available ? `${item.available} of ${item.seats}` : 'Full'}</td><td className="text-right tabular-nums">{formatPrice(item.price)}</td><td className="text-right"><button type="button" className="px-2 py-1 text-sm font-medium text-accent-ink underline-offset-2 hover:underline" onClick={() => { changeFloor(item.floor || 0); choose(item.code); document.getElementById('choose-room')?.scrollIntoView({ behavior: 'smooth' }) }}>Show on plan</button></td></tr>)}</tbody></table></div>
+      <div className="overflow-x-auto px-5 pb-4"><table className="w-full min-w-[520px] text-sm"><thead><tr className="text-left text-[11px] uppercase tracking-wider text-faint"><th scope="col" className="py-2 font-medium">Room</th><th scope="col" className="py-2 font-medium">Floor</th><th scope="col" className="py-2 font-medium">Type</th><th scope="col" className="py-2 font-medium">Bathroom</th><th scope="col" className="py-2 font-medium">Free seats</th><th scope="col" className="py-2 text-right font-medium">Per seat / month</th><th scope="col"><span className="sr-only">Action</span></th></tr></thead>
+        <tbody>{hostel.rooms.map(item => <tr key={item.code} className="border-t border-line"><td className="py-2.5 tabular-nums font-medium">{item.code}</td><td>{floorName(item.floor || 0)}</td><td>{seatLabel(item.seats)}</td><td className="text-muted">{item.bath === 'ATTACHED' ? 'Attached' : item.bath === 'SHARED' ? 'Shared' : '—'}</td><td className={item.available ? 'text-open' : 'text-faint'}>{item.available ? `${item.available} of ${item.seats}` : 'Full'}</td><td className="text-right tabular-nums">{roomPriceRange(item)}</td><td className="text-right"><button type="button" className="px-2 py-1 text-sm font-medium text-accent-ink underline-offset-2 hover:underline" onClick={() => { changeFloor(item.floor || 0); choose(item.code); document.getElementById('choose-room')?.scrollIntoView({ behavior: 'smooth' }) }}>Show on plan</button></td></tr>)}</tbody></table></div>
     </details>
   </section>
 }
@@ -192,8 +193,8 @@ export function HostelDetail() {
       <div className="mt-10 grid gap-10 lg:grid-cols-[1fr_360px]">
         <section><h2 className="text-lg font-semibold tracking-tight">About this hostel</h2><p className="mt-3 whitespace-pre-wrap text-[15px] leading-8 text-muted">{hostel.description}</p>{hostel.amenities.length > 0 && <><h2 className="mt-8 text-lg font-semibold tracking-tight">Amenities</h2><ul className="mt-4 flex flex-wrap gap-2">{hostel.amenities.map(item => <li key={item} className="chip border border-line !bg-surface !px-3.5 !py-2 !text-[13px]">{item}</li>)}</ul></>}{hostel.universities?.length > 0 && <><h2 className="mt-8 text-lg font-semibold tracking-tight">Nearby universities</h2><ul className="mt-4 flex flex-wrap gap-2">{hostel.universities.map(item => <li key={item} className="chip border border-line !bg-surface !px-3.5 !py-2 !text-[13px]">{item}</li>)}</ul></>}</section>
         <aside className="panel h-fit lg:sticky lg:top-24">
-          <p className="text-[11px] uppercase tracking-wider text-faint">From</p>
-          <p className="mt-1 text-3xl font-semibold tabular-nums tracking-tight">{formatPrice(lowestPrice(hostel))}<span className="text-sm font-normal text-muted">{hasSeaters(hostel) ? ' per bed / month' : ' / month'}</span></p>
+          <p className="text-[11px] uppercase tracking-wider text-faint">{highestPrice(hostel) > lowestPrice(hostel) ? 'Price range' : 'From'}</p>
+          <p className="mt-1 text-[28px] font-semibold leading-tight tabular-nums tracking-tight">{priceRange(hostel)}<span className="block text-sm font-normal tracking-normal text-muted">{hasSeaters(hostel) ? ' per bed / month' : ' / month'}</span></p>
           <dl className="mt-6 grid gap-3 border-t border-line pt-5 text-sm">
             {hasSeaters(hostel) ? <><div className="flex justify-between gap-4"><dt className="text-muted">Rooms</dt><dd className="text-right font-medium">{hostel.seaterRooms.map(type => seatLabel(type.seats)).join(', ')}</dd></div>{hostel.floors && <div className="flex justify-between gap-4"><dt className="text-muted">Floors</dt><dd className="font-medium">{hostel.floors}</dd></div>}{hostel.mealsPerDay !== undefined && <div className="flex justify-between gap-4"><dt className="text-muted">Meals</dt><dd className="font-medium">{mealText[hostel.mealsPerDay]}</dd></div>}</> : <div className="flex justify-between gap-4"><dt className="text-muted">Free seats</dt><dd className="font-medium">{freeSeats(hostel)}</dd></div>}
             {hasPlan(hostel) && <div className="flex justify-between gap-4"><dt className="text-muted">Room types</dt><dd className="text-right font-medium">{roomTypes(hostel).map(group => group.seats).join(', ')} seats per room</dd></div>}

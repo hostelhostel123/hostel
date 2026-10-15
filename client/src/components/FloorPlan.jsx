@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useCssVars } from './theme'
-import { availability, availabilityText, formatPrice, seatLabel } from '../lib/rooms'
+import { availability, availabilityText, roomPriceRange, seatLabel } from '../lib/rooms'
 
 // Blueprint colours come from the active theme (styles.css), so the plan follows light and dark mode.
 const PLAN_VARS = { floor: '--plan-floor', corridor: '--plan-corridor', wall: '--plan-wall', wallSoft: '--plan-wall-soft', label: '--plan-label', dim: '--plan-dim', grid: '--plan-grid', gridMajor: '--plan-grid-major', open: '--plan-open', limited: '--plan-limited', full: '--plan-full', bedTaken: '--plan-bed-taken', takenLine: '--plan-bed-taken-line', window: '--plan-window', tiles: '--plan-tiles' }
@@ -109,6 +109,23 @@ function AreaFurniture({ area }) {
   return null
 }
 
+// An attached bathroom: a tiled en-suite in the far corner, opposite the room's door. Width matches the server layout.
+const ENSUITE = 7
+function Ensuite({ room, side }) {
+  const depth = Math.min(9, room.h * 0.45)
+  const x = room.x + room.w - ENSUITE, y = side === 'top' ? room.y + room.h - depth : room.y
+  const inner = side === 'top' ? y : y + depth
+  const s = { fill: 'none', stroke: C.wallSoft, strokeWidth: 0.22 }
+  return <g>
+    <rect x={x} y={y} width={ENSUITE} height={depth} fill="url(#tiles)" />
+    <line x1={x} y1={y} x2={x} y2={y + depth} stroke={C.wall} strokeWidth={0.35} />
+    <line x1={x} y1={inner} x2={x + ENSUITE - 3.2} y2={inner} stroke={C.wall} strokeWidth={0.35} />
+    <ellipse cx={x + 2} cy={side === 'top' ? y + depth - 2.2 : y + 2.2} rx={0.9} ry={1.2} {...s} />
+    <rect x={x + ENSUITE - 2.9} y={side === 'top' ? y + depth - 3.4 : y + 0.5} width={2.4} height={2.9} {...s} />
+    <line x1={x + ENSUITE - 2.9} y1={side === 'top' ? y + depth - 3.4 : y + 0.5} x2={x + ENSUITE - 0.5} y2={side === 'top' ? y + depth - 0.5 : y + 3.4} {...s} />
+  </g>
+}
+
 export function FloorPlan({ rooms, areas, selected, onSelect }) {
   Object.assign(C, useCssVars(PLAN_VARS))
   const [hovered, setHovered] = useState('')
@@ -123,7 +140,7 @@ export function FloorPlan({ rooms, areas, selected, onSelect }) {
   const tip = rooms.find(room => room.code === hovered)
   const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
   return <div className="relative select-none" style={{ aspectRatio: `${vw} / ${vh}` }}>
-    <svg viewBox={`${-PAD} ${-PAD} ${vw} ${vh}`} className="absolute inset-0 h-full w-full" aria-hidden="true" fontFamily="'Geist Mono', ui-monospace, monospace">
+    <svg viewBox={`${-PAD} ${-PAD} ${vw} ${vh}`} className="absolute inset-0 h-full w-full" aria-hidden="true" fontFamily="'Geist', ui-sans-serif, system-ui, sans-serif">
       <defs>
         <pattern id="bp-grid" width="2.5" height="2.5" patternUnits="userSpaceOnUse"><path d="M2.5 0H0V2.5" fill="none" stroke={C.grid} strokeWidth="0.12" /></pattern>
         <pattern id="bp-grid-major" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M10 0H0V10" fill="none" stroke={C.gridMajor} strokeWidth="0.18" /></pattern>
@@ -158,7 +175,8 @@ export function FloorPlan({ rooms, areas, selected, onSelect }) {
         const labelY = top ? room.y + 4 : room.y + room.h - 3.9
         const color = toneOf(state)
         return <g key={`r-${room.code}`}>
-          <Beds room={room} side={side} state={state} />
+          {room.bath === 'ATTACHED' && <Ensuite room={room} side={side} />}
+          <Beds room={room.bath === 'ATTACHED' ? { ...room, w: room.w - ENSUITE } : room} side={side} state={state} />
           <Walls item={room} side={side} />
           <text x={room.x + 1.4} y={labelY} fontSize="2.5" fontWeight="600" fill={C.label}>{room.code}</text>
           <text x={room.x + 1.4} y={labelY + 2.1} fontSize="1.25" letterSpacing="0.12" fill={color === C.full ? C.dim : color}>{`${room.available}/${room.seats} FREE`}</text>
@@ -178,12 +196,12 @@ export function FloorPlan({ rooms, areas, selected, onSelect }) {
     </svg>
     {rooms.map(room => <button key={room.code} type="button" onClick={() => onSelect(room.code)} aria-pressed={room.code === selected}
       onMouseEnter={() => setHovered(room.code)} onMouseLeave={() => setHovered('')} onFocus={() => setHovered(room.code)} onBlur={() => setHovered('')}
-      aria-label={`Room ${room.code}, ${seatLabel(room.seats)}, ${room.available} of ${room.seats} seats free, ${formatPrice(room.price)} per seat per month`}
+      aria-label={`Room ${room.code}, ${seatLabel(room.seats)}, ${room.available} of ${room.seats} seats free, ${roomPriceRange(room)} per seat per month${room.bath === 'ATTACHED' ? ', attached bathroom' : room.bath === 'SHARED' ? ', shared bathroom' : ''}`}
       style={{ left: pct(room.x, vw), top: pct(room.y, vh), width: size(room.w, vw), height: size(room.h, vh) }}
       className="absolute cursor-pointer bg-transparent outline-offset-[-2px] focus-visible:outline-2 focus-visible:outline-white" />)}
     {tip && tip.code !== selected && <div role="presentation" className="fade pointer-events-none absolute z-20 w-max -translate-x-1/2 -translate-y-full rounded-lg border border-plan-edge bg-plan/95 px-3 py-2 shadow-xl backdrop-blur" style={{ left: pct(tip.x + tip.w / 2, vw), top: `calc(${pct(tip.y, vh)} - 8px)` }}>
-      <p className="font-mono text-[12px] font-semibold text-plan-text">Room {tip.code} · {seatLabel(tip.seats)}</p>
-      <p className="mt-0.5 font-mono text-[11px] text-plan-muted"><span style={{ color: availability(tip) === 'full' ? undefined : toneOf(availability(tip)) }}>{availabilityText[availability(tip)]}</span> · {formatPrice(tip.price)}/seat</p>
+      <p className="tabular-nums text-[12px] font-semibold text-plan-text">Room {tip.code} · {seatLabel(tip.seats)}{tip.bath === 'ATTACHED' ? ' · attached bath' : ''}</p>
+      <p className="mt-0.5 tabular-nums text-[11px] text-plan-muted"><span style={{ color: availability(tip) === 'full' ? undefined : toneOf(availability(tip)) }}>{availabilityText[availability(tip)]}</span> · {roomPriceRange(tip)}/seat</p>
     </div>}
   </div>
 }
@@ -191,7 +209,7 @@ export function FloorPlan({ rooms, areas, selected, onSelect }) {
 export function PlanLegend() {
   const bed = (fill, stroke) => <svg width="10" height="16" viewBox="0 0 10 16" aria-hidden="true"><rect x="1" y="1" width="8" height="14" rx="1" style={{ fill, stroke }} strokeWidth="1.2" /><rect x="2.5" y="2.5" width="5" height="3" rx=".6" fill="none" style={{ stroke }} strokeWidth="1" /></svg>
   const tint = name => `color-mix(in srgb, var(${name}) 18%, transparent)`
-  return <ul className="flex flex-wrap items-center gap-x-5 gap-y-2 font-mono text-[11px] uppercase tracking-wider text-plan-muted">
+  return <ul className="flex flex-wrap items-center gap-x-5 gap-y-2 tabular-nums text-[11px] uppercase tracking-wider text-plan-muted">
     <li className="flex items-center gap-2">{bed(tint('--plan-open'), 'var(--plan-open)')}Free bed</li>
     <li className="flex items-center gap-2">{bed(tint('--plan-limited'), 'var(--plan-limited)')}Last bed</li>
     <li className="flex items-center gap-2">{bed('var(--plan-bed-taken)', 'var(--plan-bed-taken-line)')}Taken</li>
@@ -200,5 +218,5 @@ export function PlanLegend() {
 }
 
 export function FloorTabs({ floors, floor, onChange }) {
-  return <div role="tablist" aria-label="Floors" className="inline-flex rounded-lg border border-plan-edge p-1">{floors.map(value => <button key={value} role="tab" type="button" aria-selected={value === floor} onClick={() => onChange(value)} className={`min-h-9 rounded-md px-3 font-mono text-xs uppercase tracking-wider transition-colors ${value === floor ? 'bg-plan-text text-plan' : 'text-plan-muted hover:text-plan-text'}`}>{value === 0 ? 'Ground floor' : `Floor ${value}`}</button>)}</div>
+  return <div role="tablist" aria-label="Floors" className="inline-flex rounded-lg border border-plan-edge p-1">{floors.map(value => <button key={value} role="tab" type="button" aria-selected={value === floor} onClick={() => onChange(value)} className={`min-h-9 rounded-md px-3 tabular-nums text-xs uppercase tracking-wider transition-colors ${value === floor ? 'bg-plan-text text-plan' : 'text-plan-muted hover:text-plan-text'}`}>{value === 0 ? 'Ground floor' : `Floor ${value}`}</button>)}</div>
 }

@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { authenticate, roles } from '../middleware/auth.js';
 import { id, pagination, validate } from '../middleware/http.js';
 import { publicUser } from '../services/auth.js';
+import { buildLayout } from '../services/layout.js';
 import { env } from '../config/env.js';
 import * as auth from '../controllers/auth.js';
 import * as hostels from '../controllers/hostels.js';
@@ -31,7 +32,12 @@ const planBox = { floor: z.number().int().min(0).max(50).default(0), x: z.number
 const room = z.object({ code: text(20), seats: z.number().int().min(1).max(20), available: z.number().int().min(0).max(20), price: z.number().min(0).max(10000000), ...planBox }).strict().refine(value => value.available <= value.seats, 'Available seats cannot exceed room capacity');
 const area = z.object({ label: text(60), kind: z.enum(['CORRIDOR', 'STAIRS', 'BATH', 'KITCHEN', 'COMMON', 'STUDY', 'OTHER']).default('OTHER'), ...planBox }).strict();
 const seaterRoom = z.object({ seats: z.number().int().min(1).max(5), rooms: z.number().int().min(0).max(1000), pricePerBed: z.number().min(0).max(10000000) }).strict();
-const hostelSchema = z.object({
+// Floors → rooms → seats, as the owner describes the building. The server prices each seat and draws the plan.
+const planRoom = z.object({ code: text(20).optional(), seats: z.number().int().min(1).max(5), bath: z.enum(['ATTACHED', 'SHARED']), available: z.number().int().min(0).max(5).optional(), seatPrices: z.array(z.number().min(0).max(10000000)).max(5).optional() }).strict()
+  .refine(value => value.available === undefined || value.available <= value.seats, 'Free seats cannot exceed the room size');
+const floorPlan = z.object({ floors: z.array(z.object({ rooms: z.array(planRoom).max(40) }).strict()).min(1).max(20) }).strict();
+const pricing = z.object({ mode: z.enum(['STANDARD', 'CUSTOM']), rates: z.array(z.object({ seats: z.number().int().min(1).max(5), price: z.number().min(0).max(10000000) }).strict()).max(5).default([]), attachedBathExtra: z.number().min(0).max(10000000).default(0) }).strict();
+export const hostelSchema = z.object({
   name: text(150), description: text(5000), city: text(100), address: text(300),
   price: z.number().min(0).max(10000000).optional(), beds: z.number().int().min(0).max(10000).optional(),
   floors: z.number().int().min(1).max(50).optional(), totalRooms: z.number().int().min(1).max(1000).optional(),
@@ -39,7 +45,18 @@ const hostelSchema = z.object({
   gender: z.enum(['MALE', 'FEMALE', 'ANY']).default('ANY'), amenities: z.array(text(80)).max(30).default([]),
   mealsPerDay: z.number().int().min(0).max(3).optional(), universities: z.array(text(120)).max(20).optional(),
   rooms: z.array(room).max(300).optional(), areas: z.array(area).max(300).optional(),
+  floorPlan: floorPlan.optional(), pricing: pricing.optional(),
 }).strict().superRefine((value, ctx) => {
+  if (value.floorPlan) {
+    const rooms = value.floorPlan.floors.flatMap(floor => floor.rooms);
+    if (!rooms.length) ctx.addIssue({ code: 'custom', message: 'Add at least one room' });
+    if (!value.pricing) { ctx.addIssue({ code: 'custom', message: 'Choose how rooms are priced' }); return; }
+    if (value.pricing.mode === 'STANDARD') {
+      const missing = [...new Set(rooms.map(room => room.seats))].filter(seats => !value.pricing.rates.some(rate => rate.seats === seats && rate.price > 0));
+      if (missing.length) ctx.addIssue({ code: 'custom', message: `Enter the price of a bed in ${missing.map(seats => `${seats}-seater`).join(', ')} rooms` });
+    } else if (rooms.some(room => room.seatPrices?.length !== room.seats || room.seatPrices.some(price => !price))) ctx.addIssue({ code: 'custom', message: 'Enter a price for every seat in every room' });
+    return;
+  }
   if (!value.seaterRooms) {
     if (value.price === undefined || value.beds === undefined) ctx.addIssue({ code: 'custom', message: 'Enter the rooms of each size and their bed prices' });
     return;
@@ -51,6 +68,7 @@ const hostelSchema = z.object({
   else if (used.reduce((sum, type) => sum + type.rooms, 0) > value.totalRooms) ctx.addIssue({ code: 'custom', message: 'The rooms of each size add up to more than the total number of rooms' });
   if (used.some(type => !type.pricePerBed)) ctx.addIssue({ code: 'custom', message: 'Enter the price of a bed for every room size you have' });
 }).transform(value => {
+  if (value.floorPlan) { const { floorPlan: plan, pricing: rates, ...rest } = value; return { ...rest, ...buildLayout(plan, rates) }; }
   if (!value.seaterRooms) return value;
   const seaterRooms = value.seaterRooms.filter(type => type.rooms > 0).sort((a, b) => a.seats - b.seats);
   return { ...value, seaterRooms, price: Math.min(...seaterRooms.map(type => type.pricePerBed)), beds: seaterRooms.reduce((sum, type) => sum + type.rooms * type.seats, 0) };
