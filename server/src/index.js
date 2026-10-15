@@ -4,6 +4,7 @@ import { createApp } from './app.js';
 import { connectDatabase } from './config/database.js';
 import { env } from './config/env.js';
 import { attachSockets } from './sockets/index.js';
+import { startIfLinked as startWhatsAppIfLinked } from './services/whatsapp.js';
 
 const app = createApp({ ensureDatabase: connectDatabase });
 
@@ -13,6 +14,7 @@ if (!process.env.VERCEL) {
   const io = attachSockets(server);
   app.set('io', io);
   server.listen(env.PORT, () => console.log(`HostelHub API listening on port ${env.PORT}`));
+  startWhatsAppIfLinked().catch(error => console.error('WhatsApp reconnect failed:', error.message));
   let closing = false;
   async function shutdown() {
     if (closing) return;

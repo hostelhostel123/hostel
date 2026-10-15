@@ -1,5 +1,8 @@
+import { createHmac, randomInt, timingSafeEqual } from 'node:crypto';
 import { env } from '../config/env.js';
 import { HttpError } from '../middleware/http.js';
+import { PhoneCode } from '../models/index.js';
+import { isLinked as isWhatsAppLinked, sendText as sendWhatsApp } from './whatsapp.js';
 
 // Twilio Verify generates, sends, expires and checks the codes, so no OTP is stored here.
 const twilio = {
@@ -16,18 +19,49 @@ const twilio = {
     if (!response.ok) throw new HttpError(502, 'The SMS service is unavailable. Please try again later.');
     return body;
   },
+  channel: 'sms',
   send: phone => twilio.request('Verifications', { To: phone, Channel: 'sms' }),
   async check(phone, code) { return (await twilio.request('VerificationCheck', { To: phone, Code: code })).status === 'approved'; },
 };
 
-let provider = env.TWILIO_ACCOUNT_SID && env.TWILIO_AUTH_TOKEN && env.TWILIO_VERIFY_SID ? twilio : null;
-export const smsEnabled = () => Boolean(provider);
-export function setSmsProvider(next) { provider = next; }
-function requireProvider() {
-  if (!provider) throw new HttpError(503, 'Phone verification is not configured yet');
-  return provider;
+// For channels without a verification service, codes are generated here and only an HMAC is stored.
+const codeTtl = 10 * 60 * 1000, maxAttempts = 5;
+const hashCode = (phone, code) => createHmac('sha256', env.JWT_SECRET).update(`${phone}:${code}`).digest('hex');
+export function codeProvider(sendText, channel) {
+  return {
+    channel,
+    async send(phone) {
+      const code = randomInt(0, 1000000).toString().padStart(6, '0');
+      await sendText(phone, `Your HostelHub verification code is ${code}. It expires in 10 minutes. Do not share it with anyone.`);
+      await PhoneCode.updateOne({ _id: phone }, { $set: { codeHash: hashCode(phone, code), attempts: 0, expiresAt: new Date(Date.now() + codeTtl) } }, { upsert: true });
+    },
+    async check(phone, code) {
+      const entry = await PhoneCode.findOneAndUpdate({ _id: phone, expiresAt: { $gt: new Date() }, attempts: { $lt: maxAttempts } }, { $inc: { attempts: 1 } }, { new: true });
+      if (!entry) return false;
+      const expected = Buffer.from(entry.codeHash, 'hex'), actual = Buffer.from(hashCode(phone, code), 'hex');
+      if (!timingSafeEqual(expected, actual)) return false;
+      await PhoneCode.deleteOne({ _id: phone });
+      return true;
+    },
+  };
 }
-export const sendCode = phone => requireProvider().send(phone);
+const whatsapp = codeProvider(sendWhatsApp, 'whatsapp');
+
+let override = null;
+const twilioConfigured = Boolean(env.TWILIO_ACCOUNT_SID && env.TWILIO_AUTH_TOKEN && env.TWILIO_VERIFY_SID);
+const provider = () => override || (twilioConfigured ? twilio : isWhatsAppLinked() ? whatsapp : null);
+export const smsEnabled = () => Boolean(provider());
+export function setSmsProvider(next) { override = next; }
+function requireProvider() {
+  const current = provider();
+  if (!current) throw new HttpError(503, 'Phone verification is not configured yet');
+  return current;
+}
+export async function sendCode(phone) {
+  const current = requireProvider();
+  await current.send(phone);
+  return current.channel || 'sms';
+}
 export const checkCode = (phone, code) => requireProvider().check(phone, code);
 
 // Accepts Pakistani local numbers (0300 1234567) or full international numbers (+92 300 1234567).

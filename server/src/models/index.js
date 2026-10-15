@@ -71,3 +71,10 @@ const sessionSchema = new Schema({
 });
 sessionSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 export const Session = model('Session', sessionSchema);
+
+const phoneCodeSchema = new Schema({
+  _id: String, codeHash: { type: String, required: true }, attempts: { type: Number, default: 0 },
+  expiresAt: { type: Date, required: true },
+});
+phoneCodeSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+export const PhoneCode = model('PhoneCode', phoneCodeSchema);

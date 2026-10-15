@@ -50,9 +50,9 @@ export async function sendPhoneCode(req, res) {
   const user = await User.findById(req.user._id).select('+phoneCodeSentAt');
   const wait = user.phoneCodeSentAt && resendAfter - (Date.now() - user.phoneCodeSentAt.getTime());
   if (wait > 0) throw new HttpError(429, `Please wait ${Math.ceil(wait / 1000)} seconds before requesting another code`);
-  await sendCode(phone);
+  const channel = await sendCode(phone);
   await User.updateOne({ _id: user._id }, { $set: { pendingPhone: phone, phoneCodeSentAt: new Date() } });
-  res.json({ data: { phone, resendAfterSeconds: resendAfter / 1000 } });
+  res.json({ data: { phone, channel, resendAfterSeconds: resendAfter / 1000 } });
 }
 export async function verifyPhoneCode(req, res) {
   const user = await User.findById(req.user._id).select('+pendingPhone');
