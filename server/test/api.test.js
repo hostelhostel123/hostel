@@ -379,3 +379,22 @@ test('listings record rooms by size with bed prices and need a photo of each roo
   assert.equal((await uploadFor(2)).status, 201);
   assert.equal((await write(owner.agent, 'post', `/hostels/${hostel._id}/submit`)).body.data.status, 'PENDING');
 });
+
+test('owners attach a YouTube video tour by link, and changing it needs a fresh review', async () => {
+  const { youtubeIdFrom } = await import('../src/controllers/hostels.js');
+  for (const link of ['https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=10s', 'https://youtu.be/dQw4w9WgXcQ?si=abc', 'youtube.com/shorts/dQw4w9WgXcQ', 'https://m.youtube.com/watch?v=dQw4w9WgXcQ', 'https://www.youtube.com/embed/dQw4w9WgXcQ', 'dQw4w9WgXcQ']) assert.equal(youtubeIdFrom(link), 'dQw4w9WgXcQ', link);
+  for (const link of ['https://vimeo.com/123', 'https://youtube.com.evil.example/watch?v=dQw4w9WgXcQ', 'https://www.youtube.com/watch?v=short', 'not a link']) assert.equal(youtubeIdFrom(link), null, link);
+
+  const owner = await account('OWNER', 'videoowner');
+  const other = await account('OWNER', 'othervideoowner');
+  const hostelId = (await write(owner.agent, 'post', '/hostels', body)).body.data._id;
+  assert.equal((await write(other.agent, 'put', `/hostels/${hostelId}/video`, { url: 'https://youtu.be/dQw4w9WgXcQ' })).status, 403);
+  assert.equal((await write(owner.agent, 'put', `/hostels/${hostelId}/video`, { url: 'https://vimeo.com/123' })).status, 400);
+  await Hostel.updateOne({ _id: hostelId }, { $set: { status: 'APPROVED' } });
+  const saved = await write(owner.agent, 'put', `/hostels/${hostelId}/video`, { url: 'https://youtu.be/dQw4w9WgXcQ' });
+  assert.equal(saved.body.data.youtubeId, 'dQw4w9WgXcQ');
+  assert.equal(saved.body.data.status, 'DRAFT');
+  await Hostel.updateOne({ _id: hostelId }, { $set: { status: 'APPROVED' } });
+  assert.equal((await request(app).get(`/api/hostels/${hostelId}`)).body.data.youtubeId, 'dQw4w9WgXcQ');
+  assert.equal((await write(owner.agent, 'put', `/hostels/${hostelId}/video`, { url: '' })).body.data.youtubeId, undefined);
+});
