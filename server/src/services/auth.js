@@ -16,9 +16,9 @@ export async function createSession(user, res) {
 export async function verifySession(token) {
   try {
     const payload = jwt.verify(token, env.JWT_SECRET, { algorithms: ['HS256'], issuer: 'hostelhub', audience: 'hostelhub-web' });
-    const session = await Session.findOne({ _id: payload.jti, user: payload.sub, expiresAt: { $gt: new Date() } });
-    const user = session && await User.findById(payload.sub);
-    if (!user?.active) throw new Error('Inactive session');
+    // Both lookups run together: the database is a long round trip away from the API server.
+    const [session, user] = await Promise.all([Session.exists({ _id: payload.jti, user: payload.sub, expiresAt: { $gt: new Date() } }), User.findById(payload.sub)]);
+    if (!session || !user?.active) throw new Error('Inactive session');
     return { user, sessionId: payload.jti };
   } catch (error) {
     if (error.name?.startsWith('Mongo')) throw error;
