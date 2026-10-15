@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { authenticate, roles } from '../middleware/auth.js';
 import { id, pagination, validate } from '../middleware/http.js';
 import { publicUser } from '../services/auth.js';
+import { env } from '../config/env.js';
 import * as auth from '../controllers/auth.js';
 import * as hostels from '../controllers/hostels.js';
 import * as images from '../controllers/images.js';
@@ -16,7 +17,8 @@ const text = max => z.string().trim().min(1).max(max);
 const optionalText = max => z.preprocess(value => typeof value === 'string' && value.trim() === '' ? undefined : value, text(max).optional());
 const email = z.email().max(254).transform(value => value.toLowerCase());
 const password = z.string().min(10).max(72).refine(value => Buffer.byteLength(value, 'utf8') <= 72, 'Password must be at most 72 bytes');
-const authLimit = rateLimit({ windowMs: 15 * 60 * 1000, limit: 30, standardHeaders: 'draft-8', legacyHeaders: false, message: { error: { message: 'Too many authentication attempts' } } });
+// The API test suite registers far more accounts than one person would in 15 minutes.
+const authLimit = rateLimit({ windowMs: 15 * 60 * 1000, limit: 30, skip: () => env.NODE_ENV === 'test', standardHeaders: 'draft-8', legacyHeaders: false, message: { error: { message: 'Too many authentication attempts' } } });
 const username = z.string().trim().toLowerCase().min(3).max(24).regex(/^[a-z0-9_]+$/, 'Use 3–24 letters, numbers, or underscores');
 router.get('/auth/username-available', authLimit, validate(z.object({ username }).strict(), 'query'), auth.usernameAvailable);
 router.post('/auth/register', authLimit, validate(z.object({ firstName: text(60).optional(), lastName: text(60).optional(), phone: text(30).optional(), name: text(100).optional(), username: username.optional(), email, password, role: z.enum(['STUDENT', 'OWNER']).default('STUDENT') }).strict().refine(data => data.name || (data.firstName && data.lastName), 'Supply a name or both first and last name').refine(data => Boolean(data.firstName) === Boolean(data.lastName), 'Supply both first and last name')) , auth.register);
@@ -62,6 +64,9 @@ router.post('/admin/users', ...superAdminOnly, validate(z.object({ name: text(10
 router.patch('/admin/users/:id', ...adminOnly, validId, validate(z.object({ active: z.boolean() }).strict()), admin.setActive);
 router.delete('/admin/users/:id', ...superAdminOnly, validId, admin.removeUser);
 router.get('/admin/analytics', ...adminOnly, admin.analytics);
+router.get('/admin/whatsapp', ...superAdminOnly, admin.whatsappStatus);
+router.post('/admin/whatsapp/link', ...superAdminOnly, admin.whatsappLink);
+router.post('/admin/whatsapp/unlink', ...superAdminOnly, admin.whatsappUnlink);
 
 router.use('/conversations', authenticate, roles('STUDENT', 'OWNER'));
 router.get('/conversations', validate(pagination, 'query'), chat.list);

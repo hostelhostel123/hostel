@@ -280,3 +280,46 @@ test('owners verify their mobile number by SMS code before submitting listings',
     assert.equal(changed.body.data.phoneVerificationRequired, true);
   } finally { setSmsProvider(null); }
 });
+
+test('WhatsApp codes are hashed, single-use, expire and lock after five wrong attempts', async () => {
+  const { codeProvider, setSmsProvider } = await import('../src/services/sms.js');
+  const { PhoneCode } = await import('../src/models/index.js');
+  const messages = [];
+  const provider = codeProvider(async (phone, text) => { messages.push({ phone, text }); }, 'whatsapp');
+  const codeIn = text => text.match(/\b(\d{6})\b/)[1];
+
+  await provider.send('+923001112222');
+  const code = codeIn(messages.at(-1).text);
+  const stored = await PhoneCode.findById('+923001112222');
+  assert.ok(stored && !JSON.stringify(stored).includes(code));
+  assert.equal(await provider.check('+923001112222', code === '000000' ? '111111' : '000000'), false);
+  assert.equal(await provider.check('+923001112222', code), true);
+  assert.equal(await provider.check('+923001112222', code), false);
+
+  await provider.send('+923001112222');
+  const second = codeIn(messages.at(-1).text);
+  for (let attempt = 0; attempt < 5; attempt++) assert.equal(await provider.check('+923001112222', second === '999999' ? '888888' : '999999'), false);
+  assert.equal(await provider.check('+923001112222', second), false);
+
+  await provider.send('+923001112222');
+  await PhoneCode.updateOne({ _id: '+923001112222' }, { $set: { expiresAt: new Date(Date.now() - 1000) } });
+  assert.equal(await provider.check('+923001112222', codeIn(messages.at(-1).text)), false);
+
+  const owner = await account('OWNER', 'whatsappowner');
+  setSmsProvider(provider);
+  try {
+    const sent = await write(owner.agent, 'post', '/auth/phone/send', { phone: '+92 300 333 4444' });
+    assert.equal(sent.body.data.channel, 'whatsapp');
+    assert.equal(messages.at(-1).phone, '+923003334444');
+    assert.equal((await write(owner.agent, 'post', '/auth/phone/verify', { code: codeIn(messages.at(-1).text) })).body.data.phoneVerified, true);
+  } finally { setSmsProvider(null); }
+
+  const superAdmin = await account('STUDENT', 'linkadmin');
+  await User.updateOne({ _id: superAdmin.user.id }, { $set: { role: 'SUPERADMIN' } });
+  const admin = await account('STUDENT', 'plainadmin');
+  await User.updateOne({ _id: admin.user.id }, { $set: { role: 'ADMIN' } });
+  assert.equal((await admin.agent.get('/api/admin/whatsapp')).status, 403);
+  const status = await superAdmin.agent.get('/api/admin/whatsapp');
+  assert.equal(status.status, 200);
+  assert.equal(status.body.data.linked, false);
+});

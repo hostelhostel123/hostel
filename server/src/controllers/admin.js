@@ -2,6 +2,17 @@ import bcrypt from 'bcryptjs';
 import { Hostel, User, Message, Conversation, Session } from '../models/index.js';
 import { HttpError } from '../middleware/http.js';
 import { publicUser } from '../services/auth.js';
+import * as whatsapp from '../services/whatsapp.js';
+
+export const whatsappStatus = (req, res) => res.json({ data: whatsapp.getStatus() });
+export async function whatsappLink(req, res) {
+  await whatsapp.start();
+  res.json({ data: whatsapp.getStatus() });
+}
+export async function whatsappUnlink(req, res) {
+  await whatsapp.unlink();
+  res.json({ data: whatsapp.getStatus() });
+}
 
 export async function hostels(req, res) {
   const { page, limit, status } = req.validated.query;

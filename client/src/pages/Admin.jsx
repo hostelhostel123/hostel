@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { NavLink, Route, Routes } from 'react-router-dom'
-import { BarChart3, Building2, LayoutDashboard, Mail, MapPin, Star, Users as UsersIcon } from 'lucide-react'
+import { BarChart3, Building2, LayoutDashboard, Mail, MapPin, MessageCircle, Star, Users as UsersIcon } from 'lucide-react'
 import { api } from '../services/api'
 import { useAuth } from '../context/AuthContext'
 import { Button, Cover, Empty, ErrorNotice, Field, Loading, Notice, Page, Pagination, StatTile, Status, useResource } from '../components/ui'
@@ -87,7 +87,39 @@ function Users() {
       <tbody>{state.result.data.map(user => <tr key={user.id} className="border-b border-line last:border-0"><td className="px-5 py-3.5 font-medium">{user.name}{user.username && <span className="block text-xs font-normal text-faint">@{user.username}</span>}</td><td className="px-5 py-3.5 text-muted">{user.email}</td><td className="px-5 py-3.5"><span className="chip font-mono !text-[11px]">{user.role}</span></td><td className="px-5 py-3.5"><span className={`inline-flex items-center gap-1.5 text-sm ${user.active ? 'text-open' : 'text-danger'}`}><span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-current" />{user.active ? 'Active' : 'Suspended'}</span></td><td className="px-5 py-3.5 text-right">{manageable(user) && <div className="flex justify-end gap-2"><Button secondary disabled={Boolean(busy)} onClick={() => toggle(user)}>{user.active ? 'Suspend account' : 'Restore account'}</Button>{superAdmin && <Button secondary disabled={Boolean(busy)} className="!text-danger" onClick={() => remove(user)}>Remove</Button>}</div>}</td></tr>)}</tbody></table></div>}
     {state.result?.data.length === 0 && <Empty>No users found.</Empty>}<Pagination pagination={state.result?.pagination} onChange={setPage} /></>}</Page>
 }
-export const adminLinks = [['/admin', 'Overview', LayoutDashboard], ['/admin/hostels', 'Hostels', Building2], ['/admin/users', 'Users', UsersIcon], ['/admin/analytics', 'Analytics', BarChart3]]
+const whatsappText = { connected: 'Connected', connecting: 'Connecting…', qr: 'Waiting for you to scan', disconnected: 'Not linked' }
+function WhatsApp() {
+  const [status, setStatus] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  useEffect(() => {
+    let cancelled = false, timer
+    async function poll() {
+      try { const { data } = await api('/admin/whatsapp'); if (!cancelled) { setStatus(data); setError('') } }
+      catch (cause) { if (!cancelled) setError(cause.message) }
+      if (!cancelled) timer = setTimeout(poll, 3000)
+    }
+    poll()
+    return () => { cancelled = true; clearTimeout(timer) }
+  }, [])
+  async function run(path) {
+    setBusy(true); setError('')
+    try { const { data } = await api(`/admin/whatsapp/${path}`, { method: 'POST' }); setStatus(data) }
+    catch (cause) { setError(cause.message) } finally { setBusy(false) }
+  }
+  const unlink = () => window.confirm('Unlink this WhatsApp number? Owners will not be able to verify their phone until a number is linked again.') && run('unlink')
+  return <Page eyebrow="Phone verification" title="WhatsApp codes." description="Owners receive their verification code as a WhatsApp message sent from the number linked here. Use a spare number: WhatsApp may ban numbers that send automated messages.">
+    <ErrorNotice>{error}</ErrorNotice>{!status ? <Loading /> : <div className="panel max-w-xl">
+      <p className="text-sm text-muted">Status</p>
+      <p className={`mt-1 text-lg font-semibold ${status.state === 'connected' ? 'text-open' : ''}`}>{whatsappText[status.state]}{status.number && <span className="ml-2 font-mono text-sm font-normal text-muted">+{status.number}</span>}</p>
+      {status.error && <p className="mt-2 text-sm text-danger">{status.error}</p>}
+      {status.state === 'qr' && status.qr && <div className="mt-5"><img src={status.qr} alt="WhatsApp link QR code" width={280} height={280} className="rounded-lg bg-white p-2" /><ol className="mt-4 list-decimal space-y-1 pl-5 text-sm text-muted"><li>Open WhatsApp on the spare phone.</li><li>Go to <strong>Settings → Linked devices → Link a device</strong>.</li><li>Scan this code. It refreshes automatically.</li></ol></div>}
+      <div className="mt-6 flex flex-wrap gap-3">{!status.linked && !['qr', 'connecting'].includes(status.state) && <Button disabled={busy} onClick={() => run('link')}>Link a WhatsApp number</Button>}{status.linked && <Button secondary disabled={busy} className="!text-danger" onClick={unlink}>Unlink number</Button>}</div>
+    </div>}
+  </Page>
+}
+export const adminLinks = [['/admin', 'Overview', LayoutDashboard], ['/admin/hostels', 'Hostels', Building2], ['/admin/users', 'Users', UsersIcon], ['/admin/analytics', 'Analytics', BarChart3], ['/admin/whatsapp', 'WhatsApp', MessageCircle, 'SUPERADMIN']]
 export default function Admin() {
-  return <Routes><Route index element={<Analytics />} /><Route path="analytics" element={<Analytics />} /><Route path="hostels" element={<Listings />} /><Route path="users" element={<Users />} /><Route path="*" element={<Page eyebrow="Error 404" title="Page not found"><NavLink to="/admin" className="action-link">Back to overview</NavLink></Page>} /></Routes>
+  const superAdmin = useAuth().user?.role === 'SUPERADMIN'
+  return <Routes><Route index element={<Analytics />} /><Route path="analytics" element={<Analytics />} /><Route path="hostels" element={<Listings />} /><Route path="users" element={<Users />} />{superAdmin && <Route path="whatsapp" element={<WhatsApp />} />}<Route path="*" element={<Page eyebrow="Error 404" title="Page not found"><NavLink to="/admin" className="action-link">Back to overview</NavLink></Page>} /></Routes>
 }

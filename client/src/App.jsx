@@ -25,7 +25,7 @@ function Shell() {
   useEffect(() => { setOpen(false) }, [location.pathname])
   const staff = staffRoles.includes(user.role)
   const home = staff ? '/admin' : '/dashboard'
-  const links = staff ? [...adminLinks, ['/profile', 'Profile', UserRound]] : ownerLinks
+  const links = staff ? [...adminLinks.filter(([, , , role]) => !role || role === user.role), ['/profile', 'Profile', UserRound]] : ownerLinks
   const title = [...links].sort(([a], [b]) => b.length - a.length).find(([path]) => location.pathname.startsWith(path))?.[1] || (staff ? 'Admin portal' : 'Owner portal')
   const initials = user.name.split(/\s+/).map(part => part[0]).slice(0, 2).join('').toUpperCase()
   return <div className="min-h-screen bg-ground">
