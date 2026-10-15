@@ -31,7 +31,8 @@ const area = z.object({ label: text(60), kind: z.enum(['CORRIDOR', 'STAIRS', 'BA
 const hostelSchema = z.object({ name: text(150), description: text(5000), city: text(100), address: text(300), price: z.number().min(0).max(10000000), beds: z.number().int().min(0).max(10000), gender: z.enum(['MALE', 'FEMALE', 'ANY']).default('ANY'), amenities: z.array(text(80)).max(30).default([]), rooms: z.array(room).max(300).optional(), areas: z.array(area).max(300).optional() }).strict();
 const owner = [authenticate, roles('OWNER')];
 const student = [authenticate, roles('STUDENT')];
-const adminOnly = [authenticate, roles('ADMIN')];
+const adminOnly = [authenticate, roles('ADMIN', 'SUPERADMIN')];
+const superAdminOnly = [authenticate, roles('SUPERADMIN')];
 const validId = validate(z.object({ id }), 'params');
 router.get('/hostels', validate(pagination.extend({ city: text(100).optional(), q: text(100).optional(), gender: z.enum(['MALE', 'FEMALE', 'ANY']).optional(), minPrice: z.coerce.number().min(0).optional(), maxPrice: z.coerce.number().min(0).optional(), sort: z.enum(['newest', 'priceAsc', 'priceDesc']).default('newest') }).refine(value => value.minPrice === undefined || value.maxPrice === undefined || value.minPrice <= value.maxPrice, 'Invalid price range'), 'query'), hostels.list);
 router.get('/owner/hostels', ...owner, validate(pagination, 'query'), hostels.mine);
@@ -50,9 +51,12 @@ router.put('/hostels/:id/images', ...owner, validId, validate(z.object({ publicI
 router.delete('/hostels/:id/images', ...owner, validId, validate(z.object({ publicId: text(200) }).strict()), images.remove);
 
 router.get('/admin/hostels', ...adminOnly, validate(pagination.extend({ status: z.enum(['DRAFT', 'PENDING', 'APPROVED', 'REJECTED', 'SUSPENDED']).optional() }), 'query'), admin.hostels);
+router.patch('/admin/hostels/:id/feature', ...superAdminOnly, validId, validate(z.object({ featured: z.boolean() }).strict()), admin.feature);
 router.patch('/admin/hostels/:id/:action', ...adminOnly, validate(z.object({ id, action: z.enum(['approve', 'reject', 'suspend', 'restore']) }), 'params'), validate(z.object({ reason: optionalText(1000) }).strict()), admin.moderate);
 router.get('/admin/users', ...adminOnly, validate(pagination, 'query'), admin.users);
+router.post('/admin/users', ...superAdminOnly, validate(z.object({ name: text(100), username, email, password, role: z.enum(['STUDENT', 'OWNER', 'ADMIN', 'SUPERADMIN']) }).strict()), admin.createUser);
 router.patch('/admin/users/:id', ...adminOnly, validId, validate(z.object({ active: z.boolean() }).strict()), admin.setActive);
+router.delete('/admin/users/:id', ...superAdminOnly, validId, admin.removeUser);
 router.get('/admin/analytics', ...adminOnly, admin.analytics);
 
 router.use('/conversations', authenticate, roles('STUDENT', 'OWNER'));

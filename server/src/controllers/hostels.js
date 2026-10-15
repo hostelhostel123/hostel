@@ -10,7 +10,7 @@ export async function list(req, res) {
   if (q) filter.$or = ['name', 'city', 'address'].map(key => ({ [key]: new RegExp(escapeRegex(q), 'i') }));
   if (gender) filter.gender = gender;
   if (minPrice !== undefined || maxPrice !== undefined) filter.price = { ...(minPrice !== undefined && { $gte: minPrice }), ...(maxPrice !== undefined && { $lte: maxPrice }) };
-  const order = { newest: { createdAt: -1, _id: -1 }, priceAsc: { price: 1, _id: 1 }, priceDesc: { price: -1, _id: -1 } }[sort];
+  const order = { featured: -1, ...{ newest: { createdAt: -1, _id: -1 }, priceAsc: { price: 1, _id: 1 }, priceDesc: { price: -1, _id: -1 } }[sort] };
   const [data, total] = await Promise.all([Hostel.find(filter).sort(order).skip((page - 1) * limit).limit(limit), Hostel.countDocuments(filter)]);
   res.json({ data, pagination: { page, limit, total } });
 }

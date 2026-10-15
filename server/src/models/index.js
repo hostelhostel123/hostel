@@ -10,7 +10,7 @@ const userSchema = new Schema({
   username: { type: String, lowercase: true, trim: true, match: /^[a-z0-9_]{3,24}$/ },
   email: { type: String, required: true, unique: true, lowercase: true, trim: true },
   password: { type: String, required: true, select: false },
-  role: { type: String, enum: ['STUDENT', 'OWNER', 'ADMIN'], required: true },
+  role: { type: String, enum: ['STUDENT', 'OWNER', 'ADMIN', 'SUPERADMIN'], required: true },
   active: { type: Boolean, default: true },
   favorites: [{ type: Schema.Types.ObjectId, ref: 'Hostel' }],
 }, { timestamps: true });
@@ -41,6 +41,7 @@ const hostelSchema = new Schema({
   rooms: { type: [roomSchema], default: undefined }, areas: { type: [areaSchema], default: undefined },
   images: [{ _id: false, publicId: String, url: String }], coverImage: String,
   status: { type: String, enum: ['DRAFT', 'PENDING', 'APPROVED', 'REJECTED', 'SUSPENDED'], default: 'DRAFT' },
+  featured: { type: Boolean, default: false },
   moderationReason: String, moderatedBy: { type: Schema.Types.ObjectId, ref: 'User' },
   moderatedAt: Date, deletedAt: Date,
 }, { timestamps: true, optimisticConcurrency: true });

@@ -213,3 +213,37 @@ test('optional room plans are validated and survive edits that omit them', async
   const legacy = await write(owner.agent, 'post', '/hostels', body);
   assert.equal(legacy.body.data.rooms, undefined);
 });
+
+test('super admins manage staff, create and remove users, and feature listings', async () => {
+  const superAdmin = await account('STUDENT', 'chiefadmin');
+  await User.updateOne({ _id: superAdmin.user.id }, { $set: { role: 'SUPERADMIN' } });
+  const admin = await account('STUDENT', 'deputyadmin');
+  await User.updateOne({ _id: admin.user.id }, { $set: { role: 'ADMIN' } });
+  const owner = await account('OWNER', 'featuredowner');
+  const newUser = { name: 'Added Admin', username: 'Added_Admin', email: 'added@example.com', password, role: 'ADMIN' };
+  assert.equal((await write(admin.agent, 'post', '/admin/users', newUser)).status, 403);
+  const created = await write(superAdmin.agent, 'post', '/admin/users', newUser);
+  assert.equal(created.status, 201, JSON.stringify(created.body));
+  assert.equal(created.body.data.username, 'added_admin');
+  assert.equal((await write(superAdmin.agent, 'post', '/admin/users', newUser)).status, 409);
+  assert.equal((await write(request.agent(app), 'post', '/auth/login', { username: 'added_admin', password })).status, 200);
+  assert.equal((await write(admin.agent, 'patch', `/admin/users/${created.body.data.id}`, { active: false })).status, 403);
+  assert.equal((await write(superAdmin.agent, 'patch', `/admin/users/${admin.user.id}`, { active: false })).status, 200);
+  assert.equal((await admin.agent.get('/api/admin/users')).status, 401);
+  assert.equal((await write(superAdmin.agent, 'patch', `/admin/users/${superAdmin.user.id}`, { active: false })).status, 403);
+  assert.equal((await write(superAdmin.agent, 'delete', `/admin/users/${superAdmin.user.id}`)).status, 403);
+
+  const hostel = (await write(owner.agent, 'post', '/hostels', body)).body.data;
+  assert.equal((await write(superAdmin.agent, 'patch', `/admin/hostels/${hostel._id}/feature`, { featured: true })).status, 409);
+  await Hostel.updateOne({ _id: hostel._id }, { $set: { status: 'APPROVED' } });
+  const older = await Hostel.create({ ...body, name: 'Plain Lodge', owner: owner.user.id, status: 'APPROVED' });
+  assert.equal((await write(superAdmin.agent, 'patch', `/admin/hostels/${hostel._id}/feature`, { featured: true })).body.data.featured, true);
+  const listed = await request(app).get('/api/hostels?city=Lahore');
+  assert.equal(listed.body.data[0]._id, hostel._id);
+  assert.ok(listed.body.data.some(item => item._id === older.id));
+
+  assert.equal((await write(superAdmin.agent, 'delete', `/admin/users/${owner.user.id}`)).status, 204);
+  assert.equal(await User.exists({ _id: owner.user.id }), null);
+  assert.equal((await request(app).get(`/api/hostels/${hostel._id}`)).status, 404);
+  assert.equal((await owner.agent.get('/api/owner/hostels')).status, 401);
+});

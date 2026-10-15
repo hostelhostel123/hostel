@@ -17,7 +17,7 @@ export function Account({ role = 'STUDENT' }) {
   if (auth.user) {
     if (owner && auth.user.role !== 'OWNER') return <Page title="An owner account is required"><SignOut /></Page>
     const from = location.state?.from
-    const destination = typeof from === 'string' && from.startsWith('/') && !from.startsWith('//') && !['/login', '/register'].includes(from.split('?')[0]) ? from : owner ? '/dashboard' : auth.user.role === 'ADMIN' ? '/admin' : '/hostels'
+    const destination = typeof from === 'string' && from.startsWith('/') && !from.startsWith('//') && !['/login', '/register'].includes(from.split('?')[0]) ? from : owner ? '/dashboard' : ['ADMIN', 'SUPERADMIN'].includes(auth.user.role) ? '/admin' : '/hostels'
     return <Navigate to={destination} replace />
   }
   async function submit(event) {
