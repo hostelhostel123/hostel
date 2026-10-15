@@ -91,7 +91,16 @@ Listing payload example:
 {"name":"Campus Lodge","description":"Quiet rooms near campus","city":"Lahore","address":"Gulberg III","price":20000,"beds":5,"gender":"ANY","amenities":["WiFi","Laundry"]}
 ```
 
-A listing may also carry an optional floor plan, which the student site uses for room-by-room search results and the room picker. Omit both arrays to leave an existing plan unchanged:
+Owners normally describe the building floor by floor and let the API price every seat and draw the plan. Send `floorPlan` and `pricing` instead of `price`, `beds`, `seaterRooms`, `rooms` and `areas`:
+
+```json
+{"floorPlan":{"floors":[{"rooms":[{"seats":1,"bath":"ATTACHED"},{"seats":2,"bath":"SHARED","available":1}]},{"rooms":[{"code":"Suite A","seats":2,"bath":"ATTACHED"}]}]},
+ "pricing":{"mode":"STANDARD","rates":[{"seats":1,"price":30000},{"seats":2,"price":22000}],"attachedBathExtra":3000}}
+```
+
+Floors are listed from the ground floor up (at most 20, each with at most 40 rooms). A room has 1–5 `seats`, a `bath` of `ATTACHED` or `SHARED`, optional free seats in `available` (defaults to all of them) and an optional `code` (defaults to `G01`, `G02`, … on the ground floor and `101`, `102`, … above). With `"mode":"STANDARD"` each seat costs the rate for its room size plus `attachedBathExtra` when the bathroom is attached; every room size used needs a rate. With `"mode":"CUSTOM"` every room instead carries `seatPrices`, one price per seat. The API stores the rooms with their per-seat `price` (cheapest) and `priceMax`, generates `areas` (corridor, stairs, shared washroom, common space) and sets `price`/`maxPrice` to the cheapest and dearest seat, `beds`, `floors`, `totalRooms` and `seaterRooms` so search, rooms-by-size photos and existing views keep working.
+
+A listing may also carry an optional floor plan directly, which the student site uses for room-by-room search results and the room picker. Omit both arrays to leave an existing plan unchanged:
 
 ```json
 {"rooms":[{"code":"101","floor":0,"seats":2,"available":1,"price":28500,"x":0,"y":0,"w":20,"h":22}],"areas":[{"label":"Corridor","kind":"CORRIDOR","floor":0,"x":0,"y":22,"w":100,"h":10}]}

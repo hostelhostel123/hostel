@@ -1,11 +1,12 @@
-@import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap');
 @import 'tailwindcss';
 
 /* Light: Ivory & Warm Taupe. Dark: Burgundy & Black. Every colour below is a token the dark theme redefines. */
 @theme {
   --font-sans: 'Geist', ui-sans-serif, system-ui, sans-serif;
-  --font-mono: 'Geist Mono', ui-monospace, SFMono-Regular, monospace;
-  --font-display: 'Instrument Serif', ui-serif, Georgia, serif;
+  /* One typeface everywhere. Mono and display point at it too, so nothing can fall back to another face. */
+  --font-mono: var(--font-sans);
+  --font-display: var(--font-sans);
   --color-ground: #f8f4ec;
   --color-surface: #fffdf8;
   --color-raised: #f2ece1;
@@ -82,9 +83,9 @@
 
 @layer components {
   .eyebrow { color: var(--color-accent-ink); font-size: 11px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; }
-  .display { font-family: var(--font-display); font-weight: 400; letter-spacing: -.01em; }
-  .page-title { color: var(--color-ink); font-family: var(--font-display); font-size: clamp(2.4rem, 5vw, 3.6rem); font-weight: 400; letter-spacing: -.015em; line-height: 1; }
-  .section-title { color: var(--color-ink); font-family: var(--font-display); font-size: clamp(2.1rem, 4vw, 3.1rem); font-weight: 400; letter-spacing: -.01em; line-height: 1.05; }
+  .display { font-weight: 600; letter-spacing: -.035em; }
+  .page-title { color: var(--color-ink); font-size: clamp(2rem, 4.2vw, 2.9rem); font-weight: 600; letter-spacing: -.035em; line-height: 1.05; }
+  .section-title { color: var(--color-ink); font-size: clamp(1.8rem, 3.4vw, 2.5rem); font-weight: 600; letter-spacing: -.03em; line-height: 1.1; }
 
   .field { display: grid; gap: .45rem; }
   .field > span { color: var(--color-ink-soft); font-size: 12px; font-weight: 500; }
@@ -116,7 +117,7 @@
   .text-link:hover { text-decoration: underline; }
 
   .chip { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; background: var(--color-raised); padding: 5px 11px; color: var(--color-ink-soft); font-size: 12px; font-weight: 500; }
-  .stat { font-family: var(--font-display); font-size: 44px; line-height: 1; letter-spacing: -.01em; }
+  .stat { font-size: 40px; font-weight: 600; line-height: 1; letter-spacing: -.035em; font-variant-numeric: tabular-nums; }
 }
 
 /* Motion: short, purposeful, and off for people who ask for less. */

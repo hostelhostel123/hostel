@@ -38,7 +38,7 @@ app.set('io', io)
 for (const [directory, port] of [[mainRoot, 5173], [ownerRoot, 5174]]) {
   children.push(spawn(process.execPath, [resolve(directory, 'client/node_modules/vite/bin/vite.js'), '--host', 'localhost', '--port', String(port), '--strictPort'], {
     cwd: resolve(directory, 'client'), stdio: 'inherit', windowsHide: true,
-    env: { ...process.env, NODE_ENV: 'development', VITE_API_URL: 'http://localhost:5100/api', VITE_SOCKET_URL: 'http://localhost:5100', VITE_OWNER_PORTAL_URL: 'http://localhost:5174' },
+    env: { ...process.env, NODE_ENV: 'development', VITE_API_URL: 'http://localhost:5100/api', VITE_SOCKET_URL: 'http://localhost:5100', VITE_OWNER_PORTAL_URL: 'http://localhost:5174', VITE_STUDENT_SITE_URL: 'http://localhost:5173' },
   }))
 }
 // Advertise ready only after both frontends answer.

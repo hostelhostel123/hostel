@@ -398,3 +398,25 @@ test('owners attach a YouTube video tour by link, and changing it needs a fresh 
   assert.equal((await request(app).get(`/api/hostels/${hostelId}`)).body.data.youtubeId, 'dQw4w9WgXcQ');
   assert.equal((await write(owner.agent, 'put', `/hostels/${hostelId}/video`, { url: '' })).body.data.youtubeId, undefined);
 });
+
+test('owners describe floors and rooms; the API prices seats and draws the plan', async () => {
+  const owner = await account('OWNER', 'floorowner');
+  const floorPlan = { floors: [{ rooms: [{ seats: 1, bath: 'ATTACHED' }, { seats: 3, bath: 'SHARED', available: 2 }] }, { rooms: [{ seats: 2, bath: 'SHARED' }] }] };
+  const pricing = { mode: 'STANDARD', rates: [{ seats: 1, price: 30000 }, { seats: 2, price: 22000 }, { seats: 3, price: 18000 }], attachedBathExtra: 2500 };
+  const created = await write(owner.agent, 'post', '/hostels', { name: 'Floor House', description: 'Two floors', city: 'Lahore', address: 'Gulberg', floorPlan, pricing });
+  assert.equal(created.status, 201, JSON.stringify(created.body));
+  const hostel = created.body.data;
+  assert.equal(hostel.price, 18000);
+  assert.equal(hostel.maxPrice, 32500);
+  assert.equal(hostel.floors, 2);
+  assert.equal(hostel.totalRooms, 3);
+  assert.equal(hostel.rooms.find(room => room.code === 'G01').bath, 'ATTACHED');
+  assert.ok(hostel.areas.some(area => area.kind === 'CORRIDOR'));
+  const custom = await write(owner.agent, 'put', `/hostels/${hostel._id}`, { name: 'Floor House', description: 'Two floors', city: 'Lahore', address: 'Gulberg', floorPlan: { floors: [{ rooms: [{ seats: 2, bath: 'SHARED', seatPrices: [21000, 26000] }] }] }, pricing: { mode: 'CUSTOM' } });
+  assert.equal(custom.status, 200, JSON.stringify(custom.body));
+  assert.equal(custom.body.data.price, 21000);
+  assert.equal(custom.body.data.maxPrice, 26000);
+  assert.equal(custom.body.data.rooms.length, 1);
+  assert.deepEqual(custom.body.data.pricing, { mode: 'CUSTOM' });
+  assert.equal((await write(owner.agent, 'post', '/hostels', { name: 'Bad', description: 'x', city: 'Lahore', address: 'x', floorPlan, pricing: { mode: 'STANDARD', rates: [] } })).status, 400);
+});

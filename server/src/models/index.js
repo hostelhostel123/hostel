@@ -22,7 +22,8 @@ export const User = model('User', userSchema);
 const roomSchema = new Schema({
   code: { type: String, required: true, trim: true }, floor: { type: Number, default: 0, min: 0 },
   seats: { type: Number, required: true, min: 1 }, available: { type: Number, required: true, min: 0 },
-  price: { type: Number, required: true, min: 0 },
+  price: { type: Number, required: true, min: 0 }, priceMax: { type: Number, min: 0 },
+  bath: { type: String, enum: ['ATTACHED', 'SHARED'] }, seatPrices: { type: [Number], default: undefined },
   x: { type: Number, required: true, min: 0 }, y: { type: Number, required: true, min: 0 },
   w: { type: Number, required: true, min: 1 }, h: { type: Number, required: true, min: 1 },
 }, { _id: false });
@@ -45,6 +46,9 @@ const hostelSchema = new Schema({
   seaterRooms: { type: [{ _id: false, seats: { type: Number, min: 1, max: 5, required: true }, rooms: { type: Number, min: 0, required: true }, pricePerBed: { type: Number, min: 0, required: true } }], default: undefined },
   mealsPerDay: { type: Number, min: 0, max: 3 }, universities: { type: [String], default: undefined },
   rooms: { type: [roomSchema], default: undefined }, areas: { type: [areaSchema], default: undefined },
+  // Set when the owner described the building floor by floor: price is the cheapest seat and maxPrice the dearest.
+  maxPrice: { type: Number, min: 0 },
+  pricing: { type: new Schema({ mode: { type: String, enum: ['STANDARD', 'CUSTOM'], required: true }, rates: { type: [{ _id: false, seats: Number, price: Number }], default: undefined }, attachedBathExtra: Number }, { _id: false }), default: undefined },
   images: [{ _id: false, publicId: String, url: String, seats: { type: Number, min: 1, max: 5 } }], coverImage: String,
   // Video tours are hosted on YouTube (usually unlisted); only the video ID is kept here.
   youtubeId: { type: String, match: /^[A-Za-z0-9_-]{11}$/ },

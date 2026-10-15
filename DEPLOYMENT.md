@@ -54,7 +54,7 @@ VITE_API_URL=https://<public-api-host>/api
 VITE_SOCKET_URL=https://<public-api-host>
 ```
 
-On the admin (`main`) project also set `VITE_OWNER_PORTAL_URL=https://hostel-site-user.vercel.app` (or the actual owner/customer domain).
+On both projects also set `VITE_OWNER_PORTAL_URL` (the owner and admin portal, built from `master`) and `VITE_STUDENT_SITE_URL` (the student site, built from `main`) to their production domains. Each portal hands accounts that belong on the other one across, already signed in.
 
 Both projects must use the same API. Redeploy after changing variables: Vite embeds them into the JavaScript bundle. A production build deliberately fails when the API URL is missing, uses HTTP, points to localhost, contains credentials, or omits `/api`. This prevents the previous silent localhost deployment. Do not copy development `.env` values into production.
 
