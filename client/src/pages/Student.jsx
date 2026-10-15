@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, ArrowRight, BedDouble, Heart, MapPin, MessageCircle, SlidersHorizontal, Users } from 'lucide-react'
+import { ArrowLeft, ArrowRight, BedDouble, Heart, MapPin, MessageCircle, SlidersHorizontal, Star, Users } from 'lucide-react'
 import { api } from '../services/api'
 import { useAuth } from '../context/AuthContext'
 import { Button, Cover, Empty, ErrorNotice, Field, Loading, Page, Pagination, useResource } from '../components/ui'
@@ -47,7 +47,7 @@ export function HostelCard({ hostel, onChange }) {
         <div className="min-w-0"><h2 className="text-xl font-semibold tracking-tight"><Link to={`/hostels/${hostel._id}`} className="hover:text-accent-ink">{hostel.name}</Link></h2><p className="mt-1.5 flex items-center gap-1.5 text-sm text-muted"><MapPin size={14} aria-hidden="true" />{hostel.address}, {hostel.city}</p></div>
         <div className="text-right"><p className="text-[11px] uppercase tracking-wider text-faint">From</p><p className="text-xl font-semibold tabular-nums tracking-tight">{formatPrice(lowestPrice(hostel))}</p><p className="text-xs text-muted">per month</p></div>
       </div>
-      <div className="flex flex-wrap gap-2"><span className="chip">{residents[hostel.gender] || residents.ANY}</span><span className={`chip ${seats ? '!bg-accent-soft !text-accent-ink' : ''}`}><BedDouble size={13} aria-hidden="true" />{seats ? `${seats} ${seats === 1 ? 'seat' : 'seats'} free` : 'Fully occupied'}</span>{hostel.amenities.slice(0, 4).map(item => <span key={item} className="chip">{item}</span>)}</div>
+      <div className="flex flex-wrap gap-2">{hostel.featured && <span className="chip !bg-accent-soft !text-accent-ink"><Star size={13} aria-hidden="true" />Featured</span>}<span className="chip">{residents[hostel.gender] || residents.ANY}</span><span className={`chip ${seats ? '!bg-accent-soft !text-accent-ink' : ''}`}><BedDouble size={13} aria-hidden="true" />{seats ? `${seats} ${seats === 1 ? 'seat' : 'seats'} free` : 'Fully occupied'}</span>{hostel.amenities.slice(0, 4).map(item => <span key={item} className="chip">{item}</span>)}</div>
       <RoomSummary hostel={hostel} />
       <div className="mt-auto flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4"><Favorite hostel={hostel} onChange={onChange} /><Link to={`/hostels/${hostel._id}`} className="btn btn-primary">{hasPlan(hostel) ? 'View floor plan' : 'View details'}<ArrowRight size={16} aria-hidden="true" /></Link></div>
     </div>
