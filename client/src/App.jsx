@@ -4,7 +4,6 @@ import { ArrowRight, ArrowUpRight, Building2, Menu, Search, X } from 'lucide-rea
 import { AuthProvider, RequireRole, SignOut, useAuth } from './context/AuthContext'
 import { Account, Profile } from './pages/Account'
 import { HostelDetail, Hostels } from './pages/Student'
-import Admin from './pages/Admin'
 import Messages from './pages/Messages'
 import { Page } from './components/ui'
 import { ThemeToggle } from './components/theme'
@@ -25,7 +24,7 @@ function Shell({ children }) {
   const location = useLocation()
   useEffect(() => { const update = () => setScrolled(window.scrollY > 8); update(); window.addEventListener('scroll', update, { passive: true }); return () => window.removeEventListener('scroll', update) }, [])
   useEffect(() => { setOpen(false) }, [location.pathname])
-  const links = [['/hostels', 'Find a hostel'], ...(user?.role === 'STUDENT' ? [['/favorites', 'Saved'], ['/messages', 'Messages']] : []), ...(['ADMIN', 'SUPERADMIN'].includes(user?.role) ? [['/admin', 'Administration']] : []), ...(user ? [['/profile', user.name]] : [['/login', 'Sign in']])]
+  const links = [['/hostels', 'Find a hostel'], ...(user?.role === 'STUDENT' ? [['/favorites', 'Saved'], ['/messages', 'Messages']] : []), ...(user ? [['/profile', user.name]] : [['/login', 'Sign in']])]
   const linkClass = ({ isActive }) => `rounded-lg px-3 py-2 text-sm font-medium transition-colors ${isActive ? 'text-ink' : 'text-muted hover:text-ink'}`
   const listProperty = !user && <a href={ownerSignUp} className="rounded-lg px-3 py-2 text-sm font-medium text-muted transition-colors hover:text-ink">List your property</a>
   const navigation = <>{links.map(([to, label]) => <NavLink key={to} to={to} className={linkClass}>{label}</NavLink>)}{listProperty}{user && <SignOut />}</>
@@ -87,5 +86,5 @@ function Landing() {
 }
 
 export default function App() {
-  return <AuthProvider><Shell><Routes><Route path="/" element={<Landing />} /><Route path="/login" element={<Account />} /><Route path="/register" element={<Account key="register" />} /><Route path="/hostels" element={<Hostels />} /><Route path="/hostels/:id" element={<HostelDetail />} /><Route path="/favorites" element={<RequireRole roles={['STUDENT']}><Hostels key="favorites" favorites /></RequireRole>} /><Route path="/messages" element={<RequireRole roles={['STUDENT']}><Messages /></RequireRole>} /><Route path="/profile" element={<RequireRole roles={['STUDENT', 'OWNER', 'ADMIN', 'SUPERADMIN']}><Profile /></RequireRole>} /><Route path="/admin/*" element={<RequireRole roles={['ADMIN', 'SUPERADMIN']}><Admin /></RequireRole>} /><Route path="/owner/*" element={<Page eyebrow="Property management" title="Owner workspace" description="Manage your listings and student conversations in the dedicated owner portal."><a href={ownerPortal} className="action-link">Open owner portal <ArrowRight size={16} /></a></Page>} /><Route path="*" element={<Page eyebrow="Error 404" title="Page not found" description="The page you were looking for doesn't exist or has moved."><Link to="/" className="action-link">Back home</Link></Page>} /></Routes></Shell></AuthProvider>
+  return <AuthProvider><Shell><Routes><Route path="/" element={<Landing />} /><Route path="/login" element={<Account />} /><Route path="/register" element={<Account key="register" />} /><Route path="/hostels" element={<Hostels />} /><Route path="/hostels/:id" element={<HostelDetail />} /><Route path="/favorites" element={<RequireRole roles={['STUDENT']}><Hostels key="favorites" favorites /></RequireRole>} /><Route path="/messages" element={<RequireRole roles={['STUDENT']}><Messages /></RequireRole>} /><Route path="/profile" element={<RequireRole roles={['STUDENT', 'OWNER']}><Profile /></RequireRole>} /><Route path="/admin/*" element={<Page eyebrow="Administration" title="Administration has moved" description="Admins now manage HostelHub from the owner portal."><a href={`${ownerPortal}/login`} className="action-link">Open the owner portal <ArrowRight size={16} /></a></Page>} /><Route path="/owner/*" element={<Page eyebrow="Property management" title="Owner workspace" description="Manage your listings and student conversations in the dedicated owner portal."><a href={ownerPortal} className="action-link">Open owner portal <ArrowRight size={16} /></a></Page>} /><Route path="*" element={<Page eyebrow="Error 404" title="Page not found" description="The page you were looking for doesn't exist or has moved."><Link to="/" className="action-link">Back home</Link></Page>} /></Routes></Shell></AuthProvider>
 }

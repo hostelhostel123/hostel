@@ -15,9 +15,11 @@ export function Account({ role = 'STUDENT' }) {
   const update = key => event => setForm(current => ({ ...current, [key]: event.target.value }))
   if (auth.loading) return <Loading />
   if (auth.user) {
-    if (owner && auth.user.role !== 'OWNER') return <Page title="An owner account is required"><SignOut /></Page>
+    const staff = ['ADMIN', 'SUPERADMIN'].includes(auth.user.role)
+    if (owner && auth.user.role !== 'OWNER' && !staff) return <Page title="An owner account is required"><SignOut /></Page>
+    if (!owner && staff) return <Page title="Administration has moved" description="Admin accounts sign in on the owner portal.">{import.meta.env.VITE_OWNER_PORTAL_URL && <p className="mb-4"><a href={`${import.meta.env.VITE_OWNER_PORTAL_URL.replace(/\/$/, '')}/login`} className="action-link">Open the owner portal</a></p>}<SignOut /></Page>
     const from = location.state?.from
-    const destination = typeof from === 'string' && from.startsWith('/') && !from.startsWith('//') && !['/login', '/register'].includes(from.split('?')[0]) ? from : owner ? '/dashboard' : ['ADMIN', 'SUPERADMIN'].includes(auth.user.role) ? '/admin' : '/hostels'
+    const destination = typeof from === 'string' && from.startsWith('/') && !from.startsWith('//') && !['/login', '/register'].includes(from.split('?')[0]) ? from : staff ? '/admin' : owner ? '/dashboard' : '/hostels'
     return <Navigate to={destination} replace />
   }
   async function submit(event) {
