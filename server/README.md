@@ -91,6 +91,14 @@ Listing payload example:
 {"name":"Campus Lodge","description":"Quiet rooms near campus","city":"Lahore","address":"Gulberg III","price":20000,"beds":5,"gender":"ANY","amenities":["WiFi","Laundry"]}
 ```
 
+A listing may also carry an optional floor plan, which the student site uses for room-by-room search results and the room picker. Omit both arrays to leave an existing plan unchanged:
+
+```json
+{"rooms":[{"code":"101","floor":0,"seats":2,"available":1,"price":28500,"x":0,"y":0,"w":20,"h":22}],"areas":[{"label":"Corridor","kind":"CORRIDOR","floor":0,"x":0,"y":22,"w":100,"h":10}]}
+```
+
+`rooms` holds up to 300 rooms: `seats` is capacity (1–20), `available` is free seats (at most `seats`) and `price` is per seat per month. `areas` holds up to 300 non-bookable spaces with `kind` `CORRIDOR`, `STAIRS`, `BATH`, `KITCHEN`, `COMMON`, `STUDY`, or `OTHER`. `x`, `y`, `w` and `h` place each shape in plan units (0–1000) on its `floor` (0 is the ground floor).
+
 Gender is `MALE`, `FEMALE`, or `ANY`; sort is `newest`, `priceAsc`, or `priceDesc`. City matching is case-insensitive. Search escapes regex metacharacters. Listing writes cannot assign owner or approval status. Every listing/image edit resets to DRAFT; the owner submits it for review again. Suspended listings cannot be edited or resubmitted until an admin restores them. Account reactivation does not automatically republish suspended listings. Deleted listings disappear from public and owner lists; existing conversations remain available.
 
 ## Images

@@ -25,7 +25,10 @@ router.post('/auth/logout', authenticate, auth.logout);
 router.get('/auth/me', authenticate, (req, res) => res.json({ data: publicUser(req.user) }));
 router.patch('/auth/me', authenticate, validate(z.object({ name: text(100), phone: z.string().trim().max(30).optional() }).strict()), auth.profile);
 
-const hostelSchema = z.object({ name: text(150), description: text(5000), city: text(100), address: text(300), price: z.number().min(0).max(10000000), beds: z.number().int().min(0).max(10000), gender: z.enum(['MALE', 'FEMALE', 'ANY']).default('ANY'), amenities: z.array(text(80)).max(30).default([]) }).strict();
+const planBox = { floor: z.number().int().min(0).max(50).default(0), x: z.number().min(0).max(1000), y: z.number().min(0).max(1000), w: z.number().min(1).max(1000), h: z.number().min(1).max(1000) };
+const room = z.object({ code: text(20), seats: z.number().int().min(1).max(20), available: z.number().int().min(0).max(20), price: z.number().min(0).max(10000000), ...planBox }).strict().refine(value => value.available <= value.seats, 'Available seats cannot exceed room capacity');
+const area = z.object({ label: text(60), kind: z.enum(['CORRIDOR', 'STAIRS', 'BATH', 'KITCHEN', 'COMMON', 'STUDY', 'OTHER']).default('OTHER'), ...planBox }).strict();
+const hostelSchema = z.object({ name: text(150), description: text(5000), city: text(100), address: text(300), price: z.number().min(0).max(10000000), beds: z.number().int().min(0).max(10000), gender: z.enum(['MALE', 'FEMALE', 'ANY']).default('ANY'), amenities: z.array(text(80)).max(30).default([]), rooms: z.array(room).max(300).optional(), areas: z.array(area).max(300).optional() }).strict();
 const owner = [authenticate, roles('OWNER')];
 const student = [authenticate, roles('STUDENT')];
 const adminOnly = [authenticate, roles('ADMIN')];

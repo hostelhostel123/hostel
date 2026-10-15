@@ -1,11 +1,15 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { Heart, MapPin } from 'lucide-react'
+import { ArrowLeft, ArrowRight, BedDouble, Heart, MapPin, MessageCircle, SlidersHorizontal, Users } from 'lucide-react'
 import { api } from '../services/api'
 import { useAuth } from '../context/AuthContext'
 import { Button, Cover, Empty, ErrorNotice, Field, Loading, Page, Pagination, useResource } from '../components/ui'
+import { FloorPlan, FloorTabs, PlanLegend } from '../components/FloorPlan'
+import { availability, availabilityText, floorName, floorsOf, formatPrice, freeSeats, hasPlan, lowestPrice, roomTypes, seatLabel } from '../lib/rooms'
 
-function Favorite({ hostel, onChange }) {
+const residents = { MALE: 'Male residents', FEMALE: 'Female residents', ANY: 'All residents' }
+
+function Favorite({ hostel, onChange, compact = false }) {
   const { user, setUser } = useAuth()
   const navigate = useNavigate()
   const [busy, setBusy] = useState(false)
@@ -18,22 +22,129 @@ function Favorite({ hostel, onChange }) {
     try { await api(`/hostels/${hostel._id}/favorite`, { method: saved ? 'DELETE' : 'POST' }); setUser(current => current && ({ ...current, favoriteIds: saved ? current.favoriteIds.filter(id => id !== hostel._id) : [...(current.favoriteIds || []), hostel._id] })); onChange?.() }
     catch (cause) { setError(cause.message) } finally { setBusy(false) }
   }
-  return <div><Button secondary disabled={busy} onClick={toggle} aria-label={saved ? 'Remove from favorites' : 'Save to favorites'}><Heart size={16} fill={saved ? 'currentColor' : 'none'} />{saved ? 'Saved' : 'Save'}</Button><ErrorNotice>{error}</ErrorNotice></div>
+  return <div><Button secondary disabled={busy} onClick={toggle} aria-label={saved ? 'Remove from favorites' : 'Save to favorites'} className={compact ? '!px-3' : ''}><Heart size={16} aria-hidden="true" className={saved ? 'fill-accent text-accent' : ''} />{!compact && (saved ? 'Saved' : 'Save')}</Button><ErrorNotice>{error}</ErrorNotice></div>
 }
+
+function RoomSummary({ hostel }) {
+  if (!hasPlan(hostel)) return <div className="rounded-xl bg-ground px-4 py-3 text-sm text-muted"><span className="font-medium text-ink">{hostel.beds} beds</span> available · room-by-room plan not published yet</div>
+  return <table className="w-full text-sm">
+    <caption className="sr-only">Rooms at {hostel.name}</caption>
+    <thead><tr className="text-left text-[11px] uppercase tracking-wider text-faint"><th scope="col" className="pb-2 font-medium">Room type</th><th scope="col" className="pb-2 font-medium">Free seats</th><th scope="col" className="pb-2 text-right font-medium">Per seat / month</th></tr></thead>
+    <tbody>{roomTypes(hostel).map(group => <tr key={group.seats} className="border-t border-line">
+      <td className="py-2.5"><span className="flex items-center gap-2 font-medium"><Users size={14} aria-hidden="true" className="text-faint" />{seatLabel(group.seats)}<span className="font-normal text-faint">· {group.rooms} {group.rooms === 1 ? 'room' : 'rooms'}</span></span></td>
+      <td className="py-2.5">{group.free ? <span className="font-medium text-open">{group.free} free</span> : <span className="text-faint">Full</span>}</td>
+      <td className="py-2.5 text-right font-medium tabular-nums">{formatPrice(group.minPrice)}</td>
+    </tr>)}</tbody>
+  </table>
+}
+
 export function HostelCard({ hostel, onChange }) {
-  return <article className="overflow-hidden rounded-2xl border border-zinc-200 bg-white transition hover:shadow-lg"><Link to={`/hostels/${hostel._id}`}><Cover hostel={hostel} /><div className="px-5 pt-5"><h2 className="font-semibold">{hostel.name}</h2><p className="mt-2 flex items-center gap-1 text-xs text-zinc-500"><MapPin size={12} />{hostel.city} · {hostel.address}</p></div></Link><div className="mx-5 mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-zinc-100 py-4"><div><p className="text-sm font-semibold">PKR {hostel.price.toLocaleString()} <span className="text-xs font-normal text-zinc-400">/ month</span></p><p className="mt-1 text-xs text-zinc-500">{hostel.beds} beds · {hostel.gender === 'ANY' ? 'All residents' : hostel.gender.toLowerCase()}</p></div><Favorite hostel={hostel} onChange={onChange} /></div></article>
+  const seats = freeSeats(hostel)
+  return <article className="lift grid overflow-hidden rounded-2xl border border-line bg-surface md:grid-cols-[300px_1fr]">
+    <Link to={`/hostels/${hostel._id}`} tabIndex={-1} aria-hidden="true" className="block p-2 md:p-3"><Cover hostel={hostel} className="h-56 w-full md:h-full md:min-h-[230px]" /></Link>
+    <div className="flex min-w-0 flex-col gap-5 p-5 md:p-6 md:pl-3">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0"><h2 className="text-xl font-semibold tracking-tight"><Link to={`/hostels/${hostel._id}`} className="hover:text-accent">{hostel.name}</Link></h2><p className="mt-1.5 flex items-center gap-1.5 text-sm text-muted"><MapPin size={14} aria-hidden="true" />{hostel.address}, {hostel.city}</p></div>
+        <div className="text-right"><p className="text-[11px] uppercase tracking-wider text-faint">From</p><p className="text-xl font-semibold tabular-nums tracking-tight">{formatPrice(lowestPrice(hostel))}</p><p className="text-xs text-muted">per month</p></div>
+      </div>
+      <div className="flex flex-wrap gap-2"><span className="chip">{residents[hostel.gender] || residents.ANY}</span><span className={`chip ${seats ? '!bg-accent-soft !text-accent-strong' : ''}`}><BedDouble size={13} aria-hidden="true" />{seats ? `${seats} ${seats === 1 ? 'seat' : 'seats'} free` : 'Fully occupied'}</span>{hostel.amenities.slice(0, 4).map(item => <span key={item} className="chip">{item}</span>)}</div>
+      <RoomSummary hostel={hostel} />
+      <div className="mt-auto flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4"><Favorite hostel={hostel} onChange={onChange} /><Link to={`/hostels/${hostel._id}`} className="btn btn-primary">{hasPlan(hostel) ? 'View floor plan' : 'View details'}<ArrowRight size={16} aria-hidden="true" /></Link></div>
+    </div>
+  </article>
 }
+
 export function Hostels({ favorites = false }) {
   const [params, setParams] = useSearchParams()
   const [filters, setFilters] = useState(() => Object.fromEntries(['q', 'city', 'minPrice', 'maxPrice', 'gender', 'sort'].map(key => [key, params.get(key) || ''])))
   const query = new URLSearchParams()
   for (const key of ['q', 'city', 'minPrice', 'maxPrice', 'gender', 'sort', 'page']) if (params.get(key)) query.set(key, params.get(key))
-  if (favorites) { const page = query.get('page'); query.forEach((_, key) => { if (key !== 'page') query.delete(key) }); query.delete('q'); query.delete('city'); query.delete('minPrice'); query.delete('maxPrice'); query.delete('gender'); query.delete('sort'); if (page) query.set('page', page) }
+  if (favorites) { const page = query.get('page'); for (const key of [...query.keys()]) query.delete(key); if (page) query.set('page', page) }
   const list = useResource(`/${favorites ? 'favorites' : 'hostels'}?${query}`)
   const update = key => event => setFilters(current => ({ ...current, [key]: event.target.value }))
   function search(event) { event.preventDefault(); setParams(Object.fromEntries(Object.entries(filters).filter(([, value]) => value !== ''))) }
-  return <Page eyebrow={favorites ? 'Your collection' : 'Explore spaces'} title={favorites ? 'Saved hostels.' : 'Find your next place.'} description={favorites ? 'Your saved, currently approved listings.' : 'Search approved hostels by location, budget and availability.'}>{!favorites && <form onSubmit={search} className="panel mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><Field label="Search"><input className="input" placeholder="Name or area" value={filters.q} onChange={update('q')} maxLength={100} /></Field><Field label="City"><input className="input" value={filters.city} onChange={update('city')} maxLength={100} /></Field><Field label="Minimum monthly price"><input className="input" type="number" min={0} max={10000000} value={filters.minPrice} onChange={update('minPrice')} /></Field><Field label="Maximum monthly price"><input className="input" type="number" min={filters.minPrice || 0} max={10000000} value={filters.maxPrice} onChange={update('maxPrice')} /></Field><Field label="Residents"><select className="input" value={filters.gender} onChange={update('gender')}><option value="">All listings</option><option value="MALE">Male</option><option value="FEMALE">Female</option><option value="ANY">Any</option></select></Field><Field label="Sort"><select className="input" value={filters.sort} onChange={update('sort')}><option value="">Newest</option><option value="priceAsc">Price: low to high</option><option value="priceDesc">Price: high to low</option></select></Field><Button className="self-end">Search</Button><Button secondary type="button" className="self-end" onClick={() => { setFilters({ q: '', city: '', minPrice: '', maxPrice: '', gender: '', sort: '' }); setParams({}) }}>Clear filters</Button></form>}<ErrorNotice retry={list.reload}>{list.error}</ErrorNotice>{list.loading ? <Loading /> : list.result && <><p className="mb-5 text-sm text-zinc-500">{list.result.pagination.total} {list.result.pagination.total === 1 ? 'place' : 'places'}</p><div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">{list.result.data.map(hostel => <HostelCard key={hostel._id} hostel={hostel} onChange={favorites ? list.reload : undefined} />)}</div>{!list.result.data.length && <Empty>{favorites ? 'No saved hostels yet. Browse listings to find your favorites.' : 'No matching hostels. Try changing your filters.'}</Empty>}<Pagination pagination={list.result.pagination} onChange={page => { const next = new URLSearchParams(params); next.set('page', page); setParams(next) }} /></>}</Page>
+  return <Page eyebrow={favorites ? 'Your collection' : 'Explore hostels'} title={favorites ? 'Saved hostels.' : 'Find your next place.'} description={favorites ? 'Your saved, currently approved listings.' : 'Every approved hostel, with the rooms it has free and what each seat costs.'}>
+    {!favorites && <form onSubmit={search} role="search" className="rise mb-10 rounded-2xl border border-line bg-surface p-4 sm:p-5">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr_.8fr_.8fr_1fr]">
+        <Field label="Search"><input className="input" placeholder="Name or area" value={filters.q} onChange={update('q')} maxLength={100} /></Field>
+        <Field label="City"><input className="input" placeholder="Any city" value={filters.city} onChange={update('city')} maxLength={100} /></Field>
+        <Field label="Residents"><select className="input" value={filters.gender} onChange={update('gender')}><option value="">All listings</option><option value="MALE">Male</option><option value="FEMALE">Female</option><option value="ANY">Any</option></select></Field>
+        <Field label="Minimum monthly price"><input className="input" type="number" inputMode="numeric" placeholder="Min" min={0} max={10000000} value={filters.minPrice} onChange={update('minPrice')} /></Field>
+        <Field label="Maximum monthly price"><input className="input" type="number" inputMode="numeric" placeholder="Max" min={filters.minPrice || 0} max={10000000} value={filters.maxPrice} onChange={update('maxPrice')} /></Field>
+        <Field label="Sort"><select className="input" value={filters.sort} onChange={update('sort')}><option value="">Newest</option><option value="priceAsc">Price: low to high</option><option value="priceDesc">Price: high to low</option></select></Field>
+      </div>
+      <div className="mt-4 flex flex-wrap items-center justify-end gap-3 border-t border-line pt-4"><Button secondary type="button" onClick={() => { setFilters({ q: '', city: '', minPrice: '', maxPrice: '', gender: '', sort: '' }); setParams({}) }}>Clear filters</Button><button className="btn btn-accent min-w-32"><SlidersHorizontal size={16} aria-hidden="true" />Search</button></div>
+    </form>}
+    <ErrorNotice retry={list.reload}>{list.error}</ErrorNotice>
+    {list.loading ? <Loading /> : list.result && <>
+      <p className="mb-5 text-sm text-muted"><span className="font-semibold text-ink">{list.result.pagination.total}</span> {list.result.pagination.total === 1 ? 'hostel' : 'hostels'}{!favorites && ' match your search'}</p>
+      <div className="grid gap-5">{list.result.data.map((hostel, index) => <div key={hostel._id} className="rise" style={{ animationDelay: `${Math.min(index, 6) * 60}ms` }}><HostelCard hostel={hostel} onChange={favorites ? list.reload : undefined} /></div>)}</div>
+      {!list.result.data.length && <Empty>{favorites ? 'No saved hostels yet. Browse listings to find your favorites.' : 'No matching hostels. Try changing your filters.'}</Empty>}
+      <Pagination pagination={list.result.pagination} onChange={page => { const next = new URLSearchParams(params); next.set('page', page); setParams(next) }} />
+    </>}
+  </Page>
 }
+
+function RoomPanel({ hostel, room, onRequest, busy, error }) {
+  const { user } = useAuth()
+  if (!room) return <div className="flex h-full flex-col justify-center gap-3 p-6 text-plan-text"><p className="font-mono text-[11px] uppercase tracking-[.18em] text-[#8796a3]">No room selected</p><p className="text-lg font-medium leading-snug">Select a room on the plan to see its seats and price.</p><p className="text-sm leading-6 text-[#9aa7b2]">Green rooms have free seats. Amber rooms have one seat left.</p></div>
+  const state = availability(room)
+  const canRequest = room.available > 0 && (!user || user.role === 'STUDENT')
+  return <div key={room.code} className="fade flex h-full flex-col gap-6 p-6 text-plan-text">
+    <div><p className="font-mono text-[11px] uppercase tracking-[.18em] text-[#8796a3]">{floorName(room.floor || 0)} · {availabilityText[state]}</p><h3 className="mt-2 font-mono text-4xl font-semibold tracking-tight">Room {room.code}</h3></div>
+    <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-plan-wall bg-plan-wall">
+      {[['Room type', seatLabel(room.seats)], ['Capacity', `${room.seats} ${room.seats === 1 ? 'seat' : 'seats'}`], ['Free seats', room.available ? `${room.available} of ${room.seats}` : 'None'], ['Per seat / month', formatPrice(room.price)]].map(([label, value]) => <div key={label} className="bg-plan p-3.5"><dt className="text-[11px] text-[#8796a3]">{label}</dt><dd className="mt-1 font-mono text-[15px] font-medium">{value}</dd></div>)}
+    </dl>
+    <div className="mt-auto grid gap-3">
+      <button type="button" disabled={!canRequest || busy} onClick={onRequest} className="btn min-h-12 bg-[#5fd3a8] text-plan hover:bg-[#7fe0bc]">{busy ? 'Sending request…' : room.available ? `Request room ${room.code}` : 'Room is full'}</button>
+      <p className="text-xs leading-5 text-[#9aa7b2]">{user && user.role !== 'STUDENT' ? 'Room requests are available to student accounts.' : `This sends ${hostel.owner?.name || 'the owner'} a message about this room. Nothing is charged.`}</p>
+      {error && <p role="alert" className="rounded-lg bg-rose-500/15 px-3 py-2 text-sm text-rose-200">{error}</p>}
+    </div>
+  </div>
+}
+
+function RoomPicker({ hostel }) {
+  const { user } = useAuth()
+  const navigate = useNavigate()
+  const floors = useMemo(() => floorsOf(hostel), [hostel])
+  const [floor, setFloor] = useState(() => (hostel.rooms.find(room => room.available) || hostel.rooms[0]).floor || 0)
+  const [selected, setSelected] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const onFloor = item => (item.floor || 0) === floor
+  const room = hostel.rooms.find(item => item.code === selected)
+  function choose(code) { setSelected(code); setError('') }
+  function changeFloor(value) { setFloor(value); setSelected(current => hostel.rooms.find(item => item.code === current && (item.floor || 0) === value) ? current : '') }
+  async function request() {
+    if (!user) { navigate('/login', { state: { from: `/hostels/${hostel._id}` } }); return }
+    setBusy(true); setError('')
+    try {
+      const chat = await api('/conversations', { method: 'POST', body: { hostelId: hostel._id } })
+      await api(`/conversations/${chat.data._id}/messages`, { method: 'POST', body: { text: `Hi, I'd like to request Room ${room.code} (${seatLabel(room.seats)}, ${floorName(room.floor || 0)}) at ${formatPrice(room.price)} per seat per month. Is a seat still available?` } })
+      navigate(`/messages?conversation=${chat.data._id}`)
+    } catch (cause) { setError(cause.message); setBusy(false) }
+  }
+  return <section aria-labelledby="choose-room" className="mt-14">
+    <div className="mb-5 flex flex-wrap items-end justify-between gap-4"><div><p className="eyebrow">Floor plan</p><h2 id="choose-room" className="section-title mt-2">Choose your room.</h2></div><p className="max-w-sm text-sm leading-6 text-muted">{freeSeats(hostel)} seats free across {hostel.rooms.length} rooms on {floors.length} {floors.length === 1 ? 'floor' : 'floors'}.</p></div>
+    <div className="overflow-hidden rounded-[22px] bg-plan shadow-[0_30px_80px_-40px_rgba(14,19,23,.7)] lg:grid lg:grid-cols-[1fr_340px]">
+      <div className="min-w-0 border-plan-grid lg:border-r">
+        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-plan-grid px-5 py-4"><FloorTabs floors={floors} floor={floor} onChange={changeFloor} /><PlanLegend /></div>
+        <div className="overflow-x-auto bg-[linear-gradient(var(--color-plan-grid)_1px,transparent_1px),linear-gradient(90deg,var(--color-plan-grid)_1px,transparent_1px)] bg-[size:24px_24px] p-5 sm:p-8">
+          <p className="mb-3 font-mono text-[11px] uppercase tracking-wider text-[#8796a3] sm:hidden">Swipe to see the whole floor</p><div key={floor} className="fade relative min-w-[560px]">
+            <FloorPlan rooms={hostel.rooms.filter(onFloor)} areas={(hostel.areas || []).filter(onFloor)} selected={selected} onSelect={choose} />
+          </div>
+        </div>
+      </div>
+      <div className="border-t border-plan-grid lg:border-t-0"><RoomPanel hostel={hostel} room={room} onRequest={request} busy={busy} error={error} /></div>
+    </div>
+    <details className="group mt-5 rounded-2xl border border-line bg-surface">
+      <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between px-5 text-sm font-medium">All rooms as a list<ArrowRight size={16} aria-hidden="true" className="transition-transform group-open:rotate-90" /></summary>
+      <div className="overflow-x-auto px-5 pb-4"><table className="w-full min-w-[520px] text-sm"><thead><tr className="text-left text-[11px] uppercase tracking-wider text-faint"><th scope="col" className="py-2 font-medium">Room</th><th scope="col" className="py-2 font-medium">Floor</th><th scope="col" className="py-2 font-medium">Type</th><th scope="col" className="py-2 font-medium">Free seats</th><th scope="col" className="py-2 text-right font-medium">Per seat / month</th><th scope="col"><span className="sr-only">Action</span></th></tr></thead>
+        <tbody>{hostel.rooms.map(item => <tr key={item.code} className="border-t border-line"><td className="py-2.5 font-mono font-medium">{item.code}</td><td>{floorName(item.floor || 0)}</td><td>{seatLabel(item.seats)}</td><td className={item.available ? 'text-open' : 'text-faint'}>{item.available ? `${item.available} of ${item.seats}` : 'Full'}</td><td className="text-right tabular-nums">{formatPrice(item.price)}</td><td className="text-right"><button type="button" className="px-2 py-1 text-sm font-medium text-accent underline-offset-2 hover:underline" onClick={() => { changeFloor(item.floor || 0); choose(item.code); document.getElementById('choose-room')?.scrollIntoView({ behavior: 'smooth' }) }}>Show on plan</button></td></tr>)}</tbody></table></div>
+    </details>
+  </section>
+}
+
 export function HostelDetail() {
   const { id } = useParams()
   const { user } = useAuth()
@@ -48,5 +159,38 @@ export function HostelDetail() {
     catch (cause) { setActionError(cause.message) } finally { setBusy(false) }
   }
   const hostel = result?.data
-  return <Page eyebrow="Find your space" title={hostel?.name || 'Hostel details'}><ErrorNotice retry={reload}>{error}</ErrorNotice>{loading && <Loading />}{hostel && <div className="grid gap-6 lg:grid-cols-[1.5fr_1fr]"><section><Cover hostel={hostel} className="h-80 w-full" /><div className="mt-4 grid grid-cols-3 gap-3">{hostel.images.map(image => <a key={image.publicId} href={image.url} target="_blank" rel="noreferrer"><img src={image.url} alt={`${hostel.name} photo`} className="h-28 w-full rounded-xl object-cover" /></a>)}</div><p className="mt-6 whitespace-pre-wrap text-sm leading-7 text-zinc-600">{hostel.description}</p><div className="mt-5 flex flex-wrap gap-2">{hostel.amenities.map(item => <span key={item} className="rounded-lg bg-zinc-100 px-3 py-2 text-xs">{item}</span>)}</div></section><aside className="panel h-fit"><p className="text-2xl font-semibold">PKR {hostel.price.toLocaleString()}<span className="text-xs font-normal text-zinc-400"> / month</span></p><p className="mt-4 text-sm text-zinc-500">{hostel.address}, {hostel.city}</p><p className="mt-3 text-sm text-zinc-500">{hostel.beds} available beds · {hostel.gender}</p><p className="mt-3 text-sm text-zinc-500">Managed by {hostel.owner?.name || 'Hostel owner'}</p><div className="mt-6 flex flex-wrap gap-3"><Favorite hostel={hostel} />{(!user || user.role === 'STUDENT') && <Button disabled={busy} onClick={message}>{busy ? 'Opening…' : 'Message owner'}</Button>}</div><ErrorNotice>{actionError}</ErrorNotice></aside></div>}</Page>
+  const gallery = hostel ? [...hostel.images].sort((a, b) => (b.publicId === hostel.coverImage) - (a.publicId === hostel.coverImage)) : []
+  return <main className="mx-auto max-w-[1240px] px-5 pb-24 pt-8 lg:px-8">
+    <Link to="/hostels" className="inline-flex min-h-11 items-center gap-2 text-sm font-medium text-muted hover:text-ink"><ArrowLeft size={16} aria-hidden="true" />All hostels</Link>
+    <ErrorNotice retry={reload}>{error}</ErrorNotice>{loading && <Loading />}
+    {!loading && !hostel && !error && <h1 className="page-title mt-4">Hostel details</h1>}
+    {hostel && <>
+      <header className="rise mt-4 flex flex-wrap items-end justify-between gap-6">
+        <div><p className="eyebrow">{residents[hostel.gender] || residents.ANY}</p><h1 className="page-title mt-3">{hostel.name}</h1><p className="mt-3 flex items-center gap-1.5 text-[15px] text-muted"><MapPin size={15} aria-hidden="true" />{hostel.address}, {hostel.city}</p></div>
+        <Favorite hostel={hostel} />
+      </header>
+      <div className="rise mt-8 grid gap-3 [animation-delay:80ms] sm:grid-cols-4 sm:grid-rows-2">
+        {gallery.length ? gallery.slice(0, 5).map((image, index) => <a key={image.publicId} href={image.url} target="_blank" rel="noreferrer" className={`group overflow-hidden rounded-xl ${index === 0 ? 'sm:col-span-2 sm:row-span-2' : 'hidden sm:block'}`}><img src={image.url} alt={`${hostel.name} photo ${index + 1}`} className={`w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.03] motion-reduce:transition-none ${index === 0 ? 'h-72 sm:h-[420px]' : 'h-[204px]'}`} /></a>) : <Cover hostel={hostel} className="h-72 w-full sm:col-span-4" />}
+      </div>
+      <div className="mt-10 grid gap-10 lg:grid-cols-[1fr_360px]">
+        <section><h2 className="text-lg font-semibold tracking-tight">About this hostel</h2><p className="mt-3 whitespace-pre-wrap text-[15px] leading-8 text-muted">{hostel.description}</p>{hostel.amenities.length > 0 && <><h2 className="mt-8 text-lg font-semibold tracking-tight">Amenities</h2><ul className="mt-4 flex flex-wrap gap-2">{hostel.amenities.map(item => <li key={item} className="chip border border-line !bg-surface !px-3.5 !py-2 !text-[13px]">{item}</li>)}</ul></>}</section>
+        <aside className="panel h-fit lg:sticky lg:top-24">
+          <p className="text-[11px] uppercase tracking-wider text-faint">From</p>
+          <p className="mt-1 text-3xl font-semibold tabular-nums tracking-tight">{formatPrice(lowestPrice(hostel))}<span className="text-sm font-normal text-muted"> / month</span></p>
+          <dl className="mt-6 grid gap-3 border-t border-line pt-5 text-sm">
+            <div className="flex justify-between gap-4"><dt className="text-muted">Free seats</dt><dd className="font-medium">{freeSeats(hostel)}</dd></div>
+            {hasPlan(hostel) && <div className="flex justify-between gap-4"><dt className="text-muted">Room types</dt><dd className="text-right font-medium">{roomTypes(hostel).map(group => group.seats).join(', ')} seats per room</dd></div>}
+            <div className="flex justify-between gap-4"><dt className="text-muted">Residents</dt><dd className="font-medium">{residents[hostel.gender] || residents.ANY}</dd></div>
+            <div className="flex justify-between gap-4"><dt className="text-muted">Managed by</dt><dd className="font-medium">{hostel.owner?.name || 'Hostel owner'}</dd></div>
+          </dl>
+          <div className="mt-6 grid gap-3">
+            {hasPlan(hostel) && <a href="#choose-room" className="btn btn-accent">Choose a room</a>}
+            {(!user || user.role === 'STUDENT') && <Button secondary={hasPlan(hostel)} disabled={busy} onClick={message}><MessageCircle size={16} aria-hidden="true" />{busy ? 'Opening…' : 'Message owner'}</Button>}
+          </div>
+          <ErrorNotice>{actionError}</ErrorNotice>
+        </aside>
+      </div>
+      {hasPlan(hostel) ? <RoomPicker hostel={hostel} /> : <section className="mt-14 rounded-2xl border border-dashed border-line-strong p-8 text-center"><p className="text-lg font-semibold tracking-tight">Floor plan coming soon</p><p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted">This owner hasn't published a room-by-room plan yet. {hostel.beds} beds are listed at {formatPrice(hostel.price)} a month. Message the owner to ask about specific rooms.</p></section>}
+    </>}
+  </main>
 }

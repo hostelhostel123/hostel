@@ -197,3 +197,19 @@ test('both portals share compatible auth, profile and origin contracts', async (
   }
   assert.equal((await request(app).options('/api/auth/login').set('Origin', 'https://evil.example').set('Access-Control-Request-Method', 'POST')).headers['access-control-allow-origin'], undefined);
 });
+
+test('optional room plans are validated and survive edits that omit them', async () => {
+  const owner = await account('OWNER', 'planowner');
+  const rooms = [{ code: '101', seats: 2, available: 1, price: 20000, x: 0, y: 0, w: 20, h: 20 }];
+  const areas = [{ label: 'Corridor', kind: 'CORRIDOR', x: 0, y: 20, w: 40, h: 8 }];
+  assert.equal((await write(owner.agent, 'post', '/hostels', { ...body, rooms: [{ ...rooms[0], available: 3 }] })).status, 400);
+  const created = await write(owner.agent, 'post', '/hostels', { ...body, rooms, areas });
+  assert.equal(created.status, 201, JSON.stringify(created.body));
+  assert.equal(created.body.data.rooms[0].floor, 0);
+  const edited = await write(owner.agent, 'put', `/hostels/${created.body.data._id}`, { ...body, name: 'Renamed Lodge' });
+  assert.equal(edited.status, 200);
+  assert.equal(edited.body.data.rooms.length, 1);
+  assert.equal(edited.body.data.areas[0].label, 'Corridor');
+  const legacy = await write(owner.agent, 'post', '/hostels', body);
+  assert.equal(legacy.body.data.rooms, undefined);
+});

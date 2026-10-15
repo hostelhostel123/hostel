@@ -17,6 +17,20 @@ const userSchema = new Schema({
 userSchema.index({ username: 1 }, { unique: true, sparse: true });
 export const User = model('User', userSchema);
 
+const roomSchema = new Schema({
+  code: { type: String, required: true, trim: true }, floor: { type: Number, default: 0, min: 0 },
+  seats: { type: Number, required: true, min: 1 }, available: { type: Number, required: true, min: 0 },
+  price: { type: Number, required: true, min: 0 },
+  x: { type: Number, required: true, min: 0 }, y: { type: Number, required: true, min: 0 },
+  w: { type: Number, required: true, min: 1 }, h: { type: Number, required: true, min: 1 },
+}, { _id: false });
+const areaSchema = new Schema({
+  label: { type: String, required: true, trim: true }, floor: { type: Number, default: 0, min: 0 },
+  kind: { type: String, enum: ['CORRIDOR', 'STAIRS', 'BATH', 'KITCHEN', 'COMMON', 'STUDY', 'OTHER'], default: 'OTHER' },
+  x: { type: Number, required: true, min: 0 }, y: { type: Number, required: true, min: 0 },
+  w: { type: Number, required: true, min: 1 }, h: { type: Number, required: true, min: 1 },
+}, { _id: false });
+
 const hostelSchema = new Schema({
   owner: ref('User'), name: { type: String, required: true },
   description: { type: String, required: true }, city: { type: String, required: true },
@@ -24,6 +38,7 @@ const hostelSchema = new Schema({
   beds: { type: Number, required: true, min: 0 },
   gender: { type: String, enum: ['MALE', 'FEMALE', 'ANY'], default: 'ANY' },
   amenities: [String],
+  rooms: { type: [roomSchema], default: undefined }, areas: { type: [areaSchema], default: undefined },
   images: [{ _id: false, publicId: String, url: String }], coverImage: String,
   status: { type: String, enum: ['DRAFT', 'PENDING', 'APPROVED', 'REJECTED', 'SUSPENDED'], default: 'DRAFT' },
   moderationReason: String, moderatedBy: { type: Schema.Types.ObjectId, ref: 'User' },
