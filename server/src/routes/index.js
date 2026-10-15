@@ -55,6 +55,7 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 *
 router.post('/hostels/:id/images', ...owner, validId, upload.array('images', 10), images.upload);
 router.put('/hostels/:id/images', ...owner, validId, validate(z.object({ publicIds: z.array(text(200)).min(1).max(10), coverImage: text(200) }).strict()), images.arrange);
 router.delete('/hostels/:id/images', ...owner, validId, validate(z.object({ publicId: text(200) }).strict()), images.remove);
+router.get('/images/:imageId', validate(z.object({ imageId: z.uuid() }), 'params'), images.show);
 
 router.get('/admin/hostels', ...adminOnly, validate(pagination.extend({ status: z.enum(['DRAFT', 'PENDING', 'APPROVED', 'REJECTED', 'SUSPENDED']).optional() }), 'query'), admin.hostels);
 router.patch('/admin/hostels/:id/feature', ...superAdminOnly, validId, validate(z.object({ featured: z.boolean() }).strict()), admin.feature);
