@@ -10,6 +10,21 @@ import { availability, availabilityText, floorName, floorsOf, formatPrice, freeS
 const residents = { MALE: 'Male residents', FEMALE: 'Female residents', ANY: 'All residents' }
 const mealText = ['No meals', 'Meals once a day', 'Meals twice a day', 'Meals three times a day']
 const hasSeaters = hostel => Array.isArray(hostel?.seaterRooms) && hostel.seaterRooms.length > 0
+// Visitors are sent to sign in first and come back to this hostel; owners and admins don't message owners.
+function MessageOwner({ hostelId, secondary = false }) {
+  const { user } = useAuth()
+  const navigate = useNavigate()
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  if (user && user.role !== 'STUDENT') return null
+  async function start() {
+    if (!user) { navigate('/login', { state: { from: `/hostels/${hostelId}` } }); return }
+    setBusy(true); setError('')
+    try { const chat = await api('/conversations', { method: 'POST', body: { hostelId } }); navigate(`/messages?conversation=${chat.data._id}`) }
+    catch (cause) { setError(cause.message); setBusy(false) }
+  }
+  return <><Button secondary={secondary} disabled={busy} onClick={start}><MessageCircle size={16} aria-hidden="true" />{busy ? 'Opening…' : 'Message owner'}</Button>{error && <p role="alert" className="w-full text-sm text-danger">{error}</p>}</>
+}
 function SeaterRooms({ hostel }) {
   return <section className="mt-14"><h2 className="text-lg font-semibold tracking-tight">Rooms and prices</h2><p className="mt-1 text-sm text-muted">{hostel.totalRooms} rooms{hostel.floors ? ` across ${hostel.floors} floor${hostel.floors > 1 ? 's' : ''}` : ''}. Prices are for one bed per month.</p>
     <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{hostel.seaterRooms.map(type => { const photo = hostel.images.find(image => image.seats === type.seats); return <article key={type.seats} className="overflow-hidden rounded-2xl border border-line bg-surface">{photo ? <a href={photo.url} target="_blank" rel="noreferrer"><img src={photo.url} alt={`${seatLabel(type.seats)} room`} className="h-44 w-full object-cover" /></a> : <div className="grid h-44 place-items-center bg-raised text-sm text-faint">No photo</div>}<div className="p-4"><div className="flex items-baseline justify-between gap-3"><h3 className="font-semibold">{seatLabel(type.seats)} room</h3><p className="text-sm text-muted">{type.rooms} room{type.rooms > 1 ? 's' : ''}</p></div><p className="mt-2 text-lg font-semibold tabular-nums">{formatPrice(type.pricePerBed)}<span className="text-sm font-normal text-muted"> per bed</span></p></div></article> })}</div>
@@ -61,7 +76,7 @@ export function HostelCard({ hostel, onChange }) {
       </div>
       <div className="flex flex-wrap gap-2">{hostel.featured && <span className="chip !bg-accent-soft !text-accent-ink"><Star size={13} aria-hidden="true" />Featured</span>}<span className="chip">{residents[hostel.gender] || residents.ANY}</span>{hasSeaters(hostel) ? <span className="chip !bg-accent-soft !text-accent-ink"><BedDouble size={13} aria-hidden="true" />{hostel.seaterRooms.map(type => seatLabel(type.seats)).join(' · ')}</span> : <span className={`chip ${seats ? '!bg-accent-soft !text-accent-ink' : ''}`}><BedDouble size={13} aria-hidden="true" />{seats ? `${seats} ${seats === 1 ? 'seat' : 'seats'} free` : 'Fully occupied'}</span>}{hostel.mealsPerDay > 0 && <span className="chip">{mealText[hostel.mealsPerDay]}</span>}{hostel.amenities.slice(0, 4).map(item => <span key={item} className="chip">{item}</span>)}</div>
       <RoomSummary hostel={hostel} />
-      <div className="mt-auto flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4"><Favorite hostel={hostel} onChange={onChange} /><Link to={`/hostels/${hostel._id}`} className="btn btn-primary">{hasPlan(hostel) ? 'View floor plan' : 'View details'}<ArrowRight size={16} aria-hidden="true" /></Link></div>
+      <div className="mt-auto flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4"><div className="flex flex-wrap items-center gap-2"><Favorite hostel={hostel} onChange={onChange} /><MessageOwner hostelId={hostel._id} secondary /></div><Link to={`/hostels/${hostel._id}`} className="btn btn-primary">{hasPlan(hostel) ? 'View floor plan' : 'View details'}<ArrowRight size={16} aria-hidden="true" /></Link></div>
     </div>
   </article>
 }
@@ -159,17 +174,7 @@ function RoomPicker({ hostel }) {
 
 export function HostelDetail() {
   const { id } = useParams()
-  const { user } = useAuth()
-  const navigate = useNavigate()
   const { result, loading, error, reload } = useResource(`/hostels/${id}`)
-  const [actionError, setActionError] = useState('')
-  const [busy, setBusy] = useState(false)
-  async function message() {
-    if (!user) { navigate('/login', { state: { from: `/hostels/${id}` } }); return }
-    setBusy(true); setActionError('')
-    try { const chat = await api('/conversations', { method: 'POST', body: { hostelId: id } }); navigate(`/messages?conversation=${chat.data._id}`) }
-    catch (cause) { setActionError(cause.message) } finally { setBusy(false) }
-  }
   const hostel = result?.data
   const gallery = hostel ? [...hostel.images].sort((a, b) => (b.publicId === hostel.coverImage) - (a.publicId === hostel.coverImage)) : []
   return <main className="mx-auto max-w-[1240px] px-5 pb-24 pt-8 lg:px-8">
@@ -197,9 +202,8 @@ export function HostelDetail() {
           </dl>
           <div className="mt-6 grid gap-3">
             {hasPlan(hostel) && <a href="#choose-room" className="btn btn-accent">Choose a room</a>}
-            {(!user || user.role === 'STUDENT') && <Button secondary={hasPlan(hostel)} disabled={busy} onClick={message}><MessageCircle size={16} aria-hidden="true" />{busy ? 'Opening…' : 'Message owner'}</Button>}
+            <MessageOwner hostelId={hostel._id} secondary={hasPlan(hostel)} />
           </div>
-          <ErrorNotice>{actionError}</ErrorNotice>
         </aside>
       </div>
       {hasSeaters(hostel) && <SeaterRooms hostel={hostel} />}

@@ -24,7 +24,7 @@ function Shell({ children }) {
   const location = useLocation()
   useEffect(() => { const update = () => setScrolled(window.scrollY > 8); update(); window.addEventListener('scroll', update, { passive: true }); return () => window.removeEventListener('scroll', update) }, [])
   useEffect(() => { setOpen(false) }, [location.pathname])
-  const links = [['/hostels', 'Find a hostel'], ...(user?.role === 'STUDENT' ? [['/favorites', 'Saved'], ['/messages', 'Messages']] : []), ...(user ? [['/profile', user.name]] : [['/login', 'Sign in']])]
+  const links = [['/hostels', 'Find a hostel'], ...(user?.role === 'STUDENT' ? [['/favorites', 'Saved']] : []), ...(!user || user.role === 'STUDENT' ? [['/messages', 'Messages']] : []), ...(user ? [['/profile', user.name]] : [['/login', 'Sign in']])]
   const linkClass = ({ isActive }) => `rounded-lg px-3 py-2 text-sm font-medium transition-colors ${isActive ? 'text-ink' : 'text-muted hover:text-ink'}`
   const listProperty = !user && <a href={ownerSignUp} className="rounded-lg px-3 py-2 text-sm font-medium text-muted transition-colors hover:text-ink">List your property</a>
   const navigation = <>{links.map(([to, label]) => <NavLink key={to} to={to} className={linkClass}>{label}</NavLink>)}{listProperty}{user && <SignOut />}</>
