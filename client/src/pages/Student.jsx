@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, ArrowRight, BedDouble, Heart, MapPin, MessageCircle, SlidersHorizontal, Star, Users } from 'lucide-react'
+import { ArrowLeft, ArrowRight, BedDouble, Camera, DoorOpen, Heart, MapPin, MessageCircle, Search, SlidersHorizontal, Star, Users } from 'lucide-react'
 import { api } from '../services/api'
 import { useAuth } from '../context/AuthContext'
 import { Button, Cover, Empty, ErrorNotice, Field, Loading, Page, Pagination, useResource } from '../components/ui'
@@ -47,36 +47,37 @@ function Favorite({ hostel, onChange, compact = false }) {
   return <div><Button secondary disabled={busy} onClick={toggle} aria-label={saved ? 'Remove from favorites' : 'Save to favorites'} className={compact ? '!px-3' : ''}><Heart size={16} aria-hidden="true" className={saved ? 'fill-current text-accent-ink' : ''} />{!compact && (saved ? 'Saved' : 'Save')}</Button><ErrorNotice>{error}</ErrorNotice></div>
 }
 
-function RoomSummary({ hostel }) {
-  if (!hasPlan(hostel) && hasSeaters(hostel)) return <table className="w-full text-sm">
-    <caption className="sr-only">Rooms at {hostel.name}</caption>
-    <thead><tr className="text-left text-[11px] uppercase tracking-wider text-faint"><th scope="col" className="pb-2 font-medium">Room type</th><th scope="col" className="pb-2 font-medium">Rooms</th><th scope="col" className="pb-2 text-right font-medium">Per bed / month</th></tr></thead>
-    <tbody>{hostel.seaterRooms.map(type => <tr key={type.seats} className="border-t border-line"><td className="py-2.5"><span className="flex items-center gap-2 font-medium"><Users size={14} aria-hidden="true" className="text-faint" />{seatLabel(type.seats)}</span></td><td className="py-2.5 text-muted">{type.rooms}</td><td className="py-2.5 text-right font-medium tabular-nums">{formatPrice(type.pricePerBed)}</td></tr>)}</tbody>
-  </table>
-  if (!hasPlan(hostel)) return <div className="rounded-xl bg-ground px-4 py-3 text-sm text-muted"><span className="font-medium text-ink">{hostel.beds} beds</span> available · room-by-room plan not published yet</div>
-  return <table className="w-full text-sm">
-    <caption className="sr-only">Rooms at {hostel.name}</caption>
-    <thead><tr className="text-left text-[11px] uppercase tracking-wider text-faint"><th scope="col" className="pb-2 font-medium">Room type</th><th scope="col" className="pb-2 font-medium">Free seats</th><th scope="col" className="pb-2 text-right font-medium">Per seat / month</th></tr></thead>
-    <tbody>{roomTypes(hostel).map(group => <tr key={group.seats} className="border-t border-line">
-      <td className="py-2.5"><span className="flex items-center gap-2 font-medium"><Users size={14} aria-hidden="true" className="text-faint" />{seatLabel(group.seats)}<span className="font-normal text-faint">· {group.rooms} {group.rooms === 1 ? 'room' : 'rooms'}</span></span></td>
-      <td className="py-2.5">{group.free ? <span className="font-medium text-open">{group.free} free</span> : <span className="text-faint">Full</span>}</td>
-      <td className="py-2.5 text-right font-medium tabular-nums">{formatRange(group.minPrice, group.maxPrice)}</td>
-    </tr>)}</tbody>
-  </table>
+// One line describing the room sizes on offer: "2-seater" or "1–4 seater rooms".
+function roomSizes(hostel) {
+  const sizes = hasPlan(hostel) ? hostel.rooms.map(room => room.seats) : (hostel.seaterRooms || []).map(type => type.seats)
+  if (!sizes.length) return null
+  const low = Math.min(...sizes), high = Math.max(...sizes)
+  return low === high ? seatLabel(low) : `${low}–${high} seater`
 }
+const residentsShort = { MALE: 'Men', FEMALE: 'Women', ANY: 'Co-ed' }
 
+// A listing at a glance: photo, price, name, area and three facts. Everything else is on the hostel page.
 export function HostelCard({ hostel, onChange }) {
   const seats = freeSeats(hostel)
-  return <article className="lift grid overflow-hidden rounded-2xl border border-line bg-surface md:grid-cols-[300px_1fr]">
-    <Link to={`/hostels/${hostel._id}`} tabIndex={-1} aria-hidden="true" className="block p-2 md:p-3"><Cover hostel={hostel} className="h-56 w-full md:h-full md:min-h-[230px]" /></Link>
-    <div className="flex min-w-0 flex-col gap-5 p-5 md:p-6 md:pl-3">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0"><h2 className="text-xl font-semibold tracking-tight"><Link to={`/hostels/${hostel._id}`} className="hover:text-accent-ink">{hostel.name}</Link></h2><p className="mt-1.5 flex items-center gap-1.5 text-sm text-muted"><MapPin size={14} aria-hidden="true" />{hostel.address}, {hostel.city}</p></div>
-        <div className="text-right"><p className="text-[11px] uppercase tracking-wider text-faint">{highestPrice(hostel) > lowestPrice(hostel) ? 'Price range' : 'From'}</p><p className="text-xl font-semibold tabular-nums tracking-tight">{priceRange(hostel)}</p><p className="text-xs text-muted">{hasSeaters(hostel) ? 'per bed / month' : 'per month'}</p></div>
+  const sizes = roomSizes(hostel)
+  return <article className="lift group relative flex flex-col overflow-hidden rounded-2xl border border-line bg-surface">
+    <div className="relative">
+      <Cover hostel={hostel} className="aspect-[4/3] w-full !rounded-none transition-transform duration-500 ease-out group-hover:scale-[1.02] motion-reduce:transition-none" />
+      <div className="pointer-events-none absolute inset-x-3 top-3 flex items-start justify-between gap-2">
+        {hostel.featured ? <span className="chip !bg-accent !text-on-accent"><Star size={12} aria-hidden="true" />Featured</span> : <span />}
       </div>
-      <div className="flex flex-wrap gap-2">{hostel.featured && <span className="chip !bg-accent-soft !text-accent-ink"><Star size={13} aria-hidden="true" />Featured</span>}<span className="chip">{residents[hostel.gender] || residents.ANY}</span>{hasSeaters(hostel) ? <span className="chip !bg-accent-soft !text-accent-ink"><BedDouble size={13} aria-hidden="true" />{hostel.seaterRooms.map(type => seatLabel(type.seats)).join(' · ')}</span> : <span className={`chip ${seats ? '!bg-accent-soft !text-accent-ink' : ''}`}><BedDouble size={13} aria-hidden="true" />{seats ? `${seats} ${seats === 1 ? 'seat' : 'seats'} free` : 'Fully occupied'}</span>}{hostel.mealsPerDay > 0 && <span className="chip">{mealText[hostel.mealsPerDay]}</span>}{hostel.amenities.slice(0, 4).map(item => <span key={item} className="chip">{item}</span>)}</div>
-      <RoomSummary hostel={hostel} />
-      <div className="mt-auto flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4"><div className="flex flex-wrap items-center gap-2"><Favorite hostel={hostel} onChange={onChange} /><MessageOwner hostelId={hostel._id} secondary /></div><Link to={`/hostels/${hostel._id}`} className="btn btn-primary">{hasPlan(hostel) ? 'View floor plan' : 'View details'}<ArrowRight size={16} aria-hidden="true" /></Link></div>
+      {hostel.images?.length > 1 && <span className="pointer-events-none absolute bottom-3 left-3 flex items-center gap-1.5 rounded-md bg-black/60 px-2 py-1 text-xs font-medium text-white"><Camera size={13} aria-hidden="true" />{hostel.images.length}</span>}
+      <div className="absolute right-3 top-3 z-10 [&_.btn]:!min-h-10 [&_.btn]:!border-0 [&_.btn]:!bg-surface/90 [&_.btn]:backdrop-blur"><Favorite hostel={hostel} onChange={onChange} compact /></div>
+    </div>
+    <div className="flex flex-1 flex-col gap-1.5 p-4">
+      <p className="text-lg font-semibold leading-tight tabular-nums tracking-tight">{priceRange(hostel)}<span className="ml-1 text-xs font-normal tracking-normal text-muted">{hasSeaters(hostel) || hasPlan(hostel) ? '/ bed' : '/ month'}</span></p>
+      <h2 className="truncate font-medium"><Link to={`/hostels/${hostel._id}`} className="after:absolute after:inset-0 after:content-[''] focus-visible:outline-none group-has-[:focus-visible]:underline">{hostel.name}</Link></h2>
+      <p className="flex min-w-0 items-center gap-1.5 text-sm text-muted"><MapPin size={14} aria-hidden="true" className="shrink-0" /><span className="truncate">{hostel.address}, {hostel.city}</span></p>
+      <ul className="mt-auto flex flex-wrap gap-x-3 gap-y-1 border-t border-line pt-3 text-[13px] text-ink-soft" aria-label="Key facts">
+        <li className="flex items-center gap-1.5"><BedDouble size={14} aria-hidden="true" className="text-faint" />{hasPlan(hostel) ? `${seats} ${seats === 1 ? 'bed' : 'beds'} free` : `${hostel.beds} ${hostel.beds === 1 ? 'bed' : 'beds'}`}</li>
+        {sizes && <li className="flex items-center gap-1.5"><DoorOpen size={14} aria-hidden="true" className="text-faint" />{sizes}</li>}
+        <li className="flex items-center gap-1.5"><Users size={14} aria-hidden="true" className="text-faint" />{residentsShort[hostel.gender] || residentsShort.ANY}</li>
+      </ul>
     </div>
   </article>
 }
@@ -89,23 +90,29 @@ export function Hostels({ favorites = false }) {
   if (favorites) { const page = query.get('page'); for (const key of [...query.keys()]) query.delete(key); if (page) query.set('page', page) }
   const list = useResource(`/${favorites ? 'favorites' : 'hostels'}?${query}`)
   const update = key => event => setFilters(current => ({ ...current, [key]: event.target.value }))
+  const filtered = ['q', 'city', 'minPrice', 'maxPrice', 'gender'].some(key => params.get(key))
+  const activeFilters = ['minPrice', 'maxPrice', 'gender'].filter(key => params.get(key)).length + (params.get('sort') ? 1 : 0)
+  const [showFilters, setShowFilters] = useState(false)
   function search(event) { event.preventDefault(); setParams(Object.fromEntries(Object.entries(filters).filter(([, value]) => value !== ''))) }
   return <Page eyebrow={favorites ? 'Your collection' : 'Explore hostels'} title={favorites ? 'Saved hostels.' : 'Find your next place.'} description={favorites ? 'Your saved, currently approved listings.' : 'Every approved hostel, with the rooms it has free and what each seat costs.'}>
-    {!favorites && <form onSubmit={search} role="search" className="rise mb-10 rounded-2xl border border-line bg-surface p-4 sm:p-5">
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr_.8fr_.8fr_1fr]">
-        <Field label="Search"><input className="input" placeholder="Name or area" value={filters.q} onChange={update('q')} maxLength={100} /></Field>
+    {!favorites && <form onSubmit={search} role="search" className="rise mb-8 rounded-2xl border border-line bg-surface p-3">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-[1.5fr_1fr_.9fr_.75fr_.75fr_.9fr_auto] lg:items-end [&>label:first-child]:col-span-2 lg:[&>label:first-child]:col-span-1">
+        <Field label="Search"><input className="input" placeholder="Hostel name or area" value={filters.q} onChange={update('q')} maxLength={100} /></Field>
         <Field label="City"><input className="input" placeholder="Any city" value={filters.city} onChange={update('city')} maxLength={100} /></Field>
-        <Field label="Residents"><select className="input" value={filters.gender} onChange={update('gender')}><option value="">All listings</option><option value="MALE">Male</option><option value="FEMALE">Female</option><option value="ANY">Any</option></select></Field>
-        <Field label="Minimum monthly price"><input className="input" type="number" inputMode="numeric" placeholder="Min" min={0} max={10000000} value={filters.minPrice} onChange={update('minPrice')} /></Field>
-        <Field label="Maximum monthly price"><input className="input" type="number" inputMode="numeric" placeholder="Max" min={filters.minPrice || 0} max={10000000} value={filters.maxPrice} onChange={update('maxPrice')} /></Field>
+        <div className={`${showFilters ? 'contents' : 'hidden'} lg:contents`}>
+        <Field label="Residents"><select className="input" value={filters.gender} onChange={update('gender')}><option value="">Anyone</option><option value="MALE">Men</option><option value="FEMALE">Women</option><option value="ANY">Co-ed</option></select></Field>
+        <Field label="Min price (PKR)"><input className="input" type="number" inputMode="numeric" placeholder="Any" min={0} max={10000000} value={filters.minPrice} onChange={update('minPrice')} /></Field>
+        <Field label="Max price (PKR)"><input className="input" type="number" inputMode="numeric" placeholder="Any" min={filters.minPrice || 0} max={10000000} value={filters.maxPrice} onChange={update('maxPrice')} /></Field>
         <Field label="Sort"><select className="input" value={filters.sort} onChange={update('sort')}><option value="">Newest</option><option value="priceAsc">Price: low to high</option><option value="priceDesc">Price: high to low</option></select></Field>
+        </div>
+        <button type="button" onClick={() => setShowFilters(open => !open)} aria-expanded={showFilters} className="btn btn-secondary min-h-[46px] self-end lg:hidden"><SlidersHorizontal size={16} aria-hidden="true" />{showFilters ? 'Fewer filters' : `Filters${activeFilters ? ` (${activeFilters})` : ''}`}</button>
+        <button className="btn btn-accent col-span-2 min-h-[46px] lg:col-span-1"><Search size={16} aria-hidden="true" />Search</button>
       </div>
-      <div className="mt-4 flex flex-wrap items-center justify-end gap-3 border-t border-line pt-4"><Button secondary type="button" onClick={() => { setFilters({ q: '', city: '', minPrice: '', maxPrice: '', gender: '', sort: '' }); setParams({}) }}>Clear filters</Button><button className="btn btn-accent min-w-32"><SlidersHorizontal size={16} aria-hidden="true" />Search</button></div>
     </form>}
     <ErrorNotice retry={list.reload}>{list.error}</ErrorNotice>
     {list.loading ? <Loading /> : list.result && <>
-      <p className="mb-5 text-sm text-muted"><span className="font-semibold text-ink">{list.result.pagination.total}</span> {list.result.pagination.total === 1 ? 'hostel' : 'hostels'}{!favorites && ' match your search'}</p>
-      <div className="grid gap-5">{list.result.data.map((hostel, index) => <div key={hostel._id} className="rise" style={{ animationDelay: `${Math.min(index, 6) * 60}ms` }}><HostelCard hostel={hostel} onChange={favorites ? list.reload : undefined} /></div>)}</div>
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3"><p className="text-sm text-muted"><span className="font-semibold text-ink">{list.result.pagination.total}</span> {list.result.pagination.total === 1 ? 'hostel' : 'hostels'}{!favorites && (filtered ? ' match your search' : ' available')}</p>{!favorites && filtered && <button type="button" className="text-link text-sm" onClick={() => { setFilters({ q: '', city: '', minPrice: '', maxPrice: '', gender: '', sort: '' }); setParams({}) }}>Clear filters</button>}</div>
+      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{list.result.data.map((hostel, index) => <div key={hostel._id} className="rise" style={{ animationDelay: `${Math.min(index, 6) * 60}ms` }}><HostelCard hostel={hostel} onChange={favorites ? list.reload : undefined} /></div>)}</div>
       {!list.result.data.length && <Empty>{favorites ? 'No saved hostels yet. Browse listings to find your favorites.' : 'No matching hostels. Try changing your filters.'}</Empty>}
       <Pagination pagination={list.result.pagination} onChange={page => { const next = new URLSearchParams(params); next.set('page', page); setParams(next) }} />
     </>}
